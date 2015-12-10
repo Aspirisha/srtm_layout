@@ -50,7 +50,6 @@ def build_mesh(output_file, min_latitude, max_latitude, min_longitude, max_longi
 	norms[ faces[:,2] ] += n
 	normalize_v3(norms)
 
-	print('there')
 	with open(output_file, "w") as f:
 		f.write('mtllib mymodel.mtl\nusemtl Solid\n')
 		for p in mesh_points:
@@ -59,16 +58,23 @@ def build_mesh(output_file, min_latitude, max_latitude, min_longitude, max_longi
 			f.write("vn {:.6f} {:.6f} {:.6f}\n".format(n[0], n[1], n[2]))
 		for face in faces:
 			f.write("f {0}//{0} {1}//{1} {2}//{2}\n".format(face[1] + 1, face[0] + 1, face[2] + 1))
+	print("successfully created layout")
 
-
+def wgs_to_chunk(point):
+	chunk = ps.app.document.chunk
+	#chunk.crs(chunk.transform.matrix.mulp(point)) 
+	return chunk.transform.matrix.inv().mulp(chunk.crs.unproject(point))
 
 def build_layout():
-	print('here')
 	doc = ps.app.document
 	chunk = doc.chunk
 
 	if chunk is None or len(chunk.cameras) == 0:
 		print("empty chunk!")
+		return
+
+	if chunk.crs is None:
+		print("align 5-10 photos to initialize chunk coordinate system and calibrate cameras")
 		return
 
 	delta_latitude_scale_to_meters = 40008000 / 360
@@ -90,8 +96,9 @@ def build_layout():
 	for c in chunk.cameras:
 		location = c.reference.location
 
-		chunk_coordinates = ps.Vector([(x - x0) * s for x, x0, s in zip(location, init_location, scales)])
-		#c.transform = ps.Matrix([[0,0,1,chunk_coordinates[0]],[0,1,0,chunk_coordinates[1]],[0,0,-1,chunk_coordinates[2]], [0,0,0,1]])
+		#chunk_coordinates = ps.Vector([(x - x0) * s for x, x0, s in zip(location, init_location, scales)])
+		chunk_coordinates = wgs_to_chunk(location)
+		c.transform = ps.Matrix([[1,0,0,chunk_coordinates[0]],[0,1,0,chunk_coordinates[1]],[0,0,1,chunk_coordinates[2]], [0,0,0,1]])
 
 	delta_latitude = max_latitude - min_latitude
 	delta_longitude = max_longitude - min_longitude
