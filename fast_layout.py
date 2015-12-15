@@ -6,6 +6,13 @@ sys.path.append(os.path.join(os.path.dirname(__file__), 'delaunay'))
 from DelaunayVoronoi import computeDelaunayTriangulation 
 import numpy as np
 
+def get_path_in_chunk():
+    chunk = PhotoScan.app.document.chunk
+    d = os.path.splitext(PhotoScan.app.document.path)[0] + ".files"
+    chunkpath = os.path.join(d, str(chunk.key))
+    return chunkpath
+
+
 def frange(x, y, jump):
 	while x < y:
 		yield x
@@ -19,6 +26,22 @@ def normalize_v3(arr):
     arr[:,2] /= lens                
     return arr
 
+def delta_vector_to_chunk(v1, v2):
+	chunk = ps.app.document.chunk
+	v1 = chunk.crs.unproject(v1)
+	v2 = chunk.crs.unproject(v2)
+	v1 = chunk.transform.matrix.inv().mulp(v1)
+	v2 = chunk.transform.matrix.inv().mulp(v2)
+	z = v2 - v1
+	z.normalize()
+
+	return z
+
+def get_chunk_vectors(lat, lon):
+	z = delta_vector_to_chunk(ps.Vector([lon, lat, 0]), ps.Vector([lon, lat, 1]))
+	y = delta_vector_to_chunk(ps.Vector([lon, lat, 0]), ps.Vector([lon + 0.001, lat, 0]))
+	x = delta_vector_to_chunk(ps.Vector([lon, lat, 0]), ps.Vector([lon, lat+0.001, 0]))
+	return x,y,-z
 
 def build_mesh(output_file, min_latitude, max_latitude, min_longitude, max_longitude, lat_step, long_step):
 	elevation_data = srtm.get_data()
@@ -74,8 +97,13 @@ def build_layout():
 		return
 
 	if chunk.crs is None:
-		print("align 5-10 photos to initialize chunk coordinate system and calibrate cameras")
+		print("Initialize chunk coordinate system first")
 		return
+
+	if chunk.transform.scale is None:
+		chunk.transform.scale = 1
+		chunk.transform.rotation = PhotoScan.Matrix([[1,0,0], [0,1,0], [0,0,1]])
+		chunk.transform.translation = PhotoScan.Vector([0,0,0])
 
 	delta_latitude_scale_to_meters = 40008000 / 360
 
@@ -92,20 +120,24 @@ def build_layout():
 	max_latitude = max(c.reference.location[1] for c in chunk.cameras)
 	min_longitude =  min(c.reference.location[0] for c in chunk.cameras)
 	max_longitude =  max(c.reference.location[0] for c in chunk.cameras)
-
-	for c in chunk.cameras:
-		location = c.reference.location
-
-		#chunk_coordinates = ps.Vector([(x - x0) * s for x, x0, s in zip(location, init_location, scales)])
-		chunk_coordinates = wgs_to_chunk(location)
-		c.transform = ps.Matrix([[1,0,0,chunk_coordinates[0]],[0,1,0,chunk_coordinates[1]],[0,0,1,chunk_coordinates[2]], [0,0,0,1]])
-
 	delta_latitude = max_latitude - min_latitude
 	delta_longitude = max_longitude - min_longitude
 	min_longitude -= delta_longitude
 	max_longitude += delta_longitude
 	min_latitude -= delta_latitude
 	max_latitude += delta_latitude
+
+
+	i,j,k = get_chunk_vectors(min_latitude, min_longitude)
+	print(get_path_in_chunk())
+	for c in chunk.cameras:
+		location = c.reference.location
+
+		#chunk_coordinates = ps.Vector([(x - x0) * s for x, x0, s in zip(location, init_location, scales)])
+		chunk_coordinates = wgs_to_chunk(location)
+		c.transform = ps.Matrix([[i.x, j.x, k.x, chunk_coordinates[0]], [i.y,j.y,k.y,chunk_coordinates[1]],[i.z,j.z,k.z,chunk_coordinates[2]], [0,0,0,1]])
+
+	print(get_chunk_vectors(min_latitude, min_latitude))
 
 	build_mesh("mymodel.obj", min_latitude, max_latitude, min_longitude, max_longitude, lat_step=0.0005, long_step=0.0005)
 

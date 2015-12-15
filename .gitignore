@@ -2,3 +2,4 @@ delaunay/
 numpy/
 requests/
 srtm*
+__pycache__/
