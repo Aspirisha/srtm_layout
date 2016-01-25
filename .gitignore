@@ -3,3 +3,4 @@ numpy/
 requests/
 srtm*
 __pycache__/
+*.pyc

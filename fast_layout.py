@@ -7,6 +7,7 @@ from DelaunayVoronoi import computeDelaunayTriangulation
 import numpy as np
 from osgeo import gdal
 import tempfile
+from layout_builder import util, tiff_downloader, gdal_merge
 
 gdal.UseExceptions()
 
@@ -18,11 +19,6 @@ def get_path_in_chunk():
 
 def is_existing_project():
     return PhotoScan.app.document.path != ''
-
-def frange(x, y, jump):
-    while x < y:
-        yield x
-        x += jump
 
 def normalize_v3(arr):
     ''' Normalize a numpy array of 3 component vectors shape=(n,3) '''
@@ -74,8 +70,8 @@ def build_mesh(output_file, min_latitude, max_latitude, min_longitude, max_longi
 
 
     mesh_points = np.array([[longitude, latitude, get_height(latitude, longitude) ] 
-        for latitude in frange(min_latitude, max_latitude, lat_step)
-        for longitude in frange(min_longitude, max_longitude, long_step)])
+        for latitude in util.frange(min_latitude, max_latitude, lat_step)
+        for longitude in util.frange(min_longitude, max_longitude, long_step)])
 
     print('mesh points length is ' + str(mesh_points.shape))
     last_ok = 0
@@ -149,22 +145,36 @@ def build_layout():
 
 
     i,j,k = get_chunk_vectors(min_latitude, min_longitude)
-    print(get_path_in_chunk())
     for c in chunk.cameras:
         location = c.reference.location
 
         #chunk_coordinates = ps.Vector([(x - x0) * s for x, x0, s in zip(location, init_location, scales)])
         chunk_coordinates = wgs_to_chunk(location)
-        c.transform = ps.Matrix([[i.x, j.x, k.x, chunk_coordinates[0]], [i.y,j.y,k.y,chunk_coordinates[1]],[i.z,j.z,k.z,chunk_coordinates[2]], [0,0,0,1]])
+        c.transform = ps.Matrix([[i.x, j.x, k.x, chunk_coordinates[0]],
+                                 [i.y,j.y,k.y,chunk_coordinates[1]],[i.z,j.z,k.z,chunk_coordinates[2]], [0,0,0,1]])
 
-    print(get_chunk_vectors(min_latitude, min_latitude))
+    #print(get_chunk_vectors(min_latitude, min_latitude))
 
+    # TODO it makes sense to make tif cache common, so following is probably not to be used
+    tif_folder = os.path.join(get_path_in_chunk(), 'geotifs')
+
+    tif_names = tiff_downloader.download_srtm_tiffs(min_latitude, min_longitude, max_latitude, max_longitude)
+    merged_tif = os.path.join(tif_folder, 'tmp.tif')
+    argv = ['gdal_merge.py', '-o', merged_tif]
+    argv.extend(tif_names)
+
+    if not os.path.isdir(tif_folder):
+        os.mkdir(tif_folder)
+    gdal_merge.main(argv)
+    chunk.importDem(merged_tif)
+
+
+    '''
     if is_existing_project():
         model_file = get_path_in_chunk() + os.sep + "mymodel.obj" 
     else:
         with tempfile.NamedTemporaryFile(dir='/tmp', delete=False, suffix='.obj') as tmpfile:
             model_file = tmpfile.name
-    print(model_file)
     build_mesh(model_file, min_latitude, max_latitude, min_longitude, max_longitude, lat_step=0.0005, long_step=0.0005)
 
     chunk.importModel(model_file)
@@ -172,6 +182,7 @@ def build_layout():
     # delete temp file
     if not is_existing_project():
         os.remove(model_file)
+    '''
 
 ps.app.addMenuItem("Workflow/Build Fast Layout", build_layout)
 #elevation_data = srtm.get_data()
