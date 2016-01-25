@@ -184,6 +184,6 @@ def build_layout():
         os.remove(model_file)
     '''
 
-ps.app.addMenuItem("Workflow/Build Fast Layout", build_layout)
+ps.app.addMenuItem("Workflow/Import SRTM DEM", build_layout)
 #elevation_data = srtm.get_data()
 #print(elevation_data.get_elevation(57.1, 95.1, approximate=True))
