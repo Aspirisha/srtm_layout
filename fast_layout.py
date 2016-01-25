@@ -5,6 +5,10 @@ import sys, os
 sys.path.append(os.path.join(os.path.dirname(__file__), 'delaunay'))
 from DelaunayVoronoi import computeDelaunayTriangulation 
 import numpy as np
+from osgeo import gdal
+import tempfile
+
+gdal.UseExceptions()
 
 def get_path_in_chunk():
     chunk = PhotoScan.app.document.chunk
@@ -12,6 +16,8 @@ def get_path_in_chunk():
     chunkpath = os.path.join(d, str(chunk.key))
     return chunkpath
 
+def is_existing_project():
+	return PhotoScan.app.document.path != ''
 
 def frange(x, y, jump):
 	while x < y:
@@ -43,10 +49,31 @@ def get_chunk_vectors(lat, lon):
 	x = delta_vector_to_chunk(ps.Vector([lon, lat, 0]), ps.Vector([lon, lat+0.001, 0]))
 	return x,y,-z
 
-def build_mesh(output_file, min_latitude, max_latitude, min_longitude, max_longitude, lat_step, long_step):
+def write_model_file(f, points, normals, faces):
+	f.write('mtllib mymodel.mtl\nusemtl Solid\n')
+	for p in points:
+		f.write("v {:.6f} {:.6f} {:.6f}\n".format(p[0], p[1], p[2]))
+	for n in normals:
+		f.write("vn {:.6f} {:.6f} {:.6f}\n".format(n[0], n[1], n[2]))
+	for face in faces:
+		f.write("f {0}//{0} {1}//{1} {2}//{2}\n".format(face[1] + 1, face[0] + 1, face[2] + 1))
+
+def build_mesh(output_file, min_latitude, max_latitude, min_longitude, max_longitude, lat_step, long_step, need_download=True):
 	elevation_data = srtm.get_data()
 
-	mesh_points = np.array([[longitude, latitude, elevation_data.get_elevation(latitude, longitude, approximate=True) ] 
+	get_height = lambda x,y: elevation_data.get_elevation(x, y, approximate=True)
+
+	print(get_height(min_latitude, min_longitude))
+	if not need_download:
+		chunk = ps.app.document.chunk
+		if chunk.elevation is None:
+			print("No elevation is provided for chunk. Downloading...")
+		else:
+			pass
+			#get_height = 
+
+
+	mesh_points = np.array([[longitude, latitude, get_height(latitude, longitude) ] 
 		for latitude in frange(min_latitude, max_latitude, lat_step)
 		for longitude in frange(min_longitude, max_longitude, long_step)])
 
@@ -65,22 +92,15 @@ def build_mesh(output_file, min_latitude, max_latitude, min_longitude, max_longi
 	tris = mesh_points[faces]
 	# normals for all triangles
 	n = np.cross( tris[::,1 ] - tris[::,0]  , tris[::,2 ] - tris[::,0] )
-	print('fefefe')
 	normalize_v3(n)
-	print('fefefe')
 	norms[ faces[:,0] ] += n
 	norms[ faces[:,1] ] += n
 	norms[ faces[:,2] ] += n
 	normalize_v3(norms)
 
 	with open(output_file, "w") as f:
-		f.write('mtllib mymodel.mtl\nusemtl Solid\n')
-		for p in mesh_points:
-			f.write("v {:.6f} {:.6f} {:.6f}\n".format(p[0], p[1], p[2]))
-		for n in norms:
-			f.write("vn {:.6f} {:.6f} {:.6f}\n".format(n[0], n[1], n[2]))
-		for face in faces:
-			f.write("f {0}//{0} {1}//{1} {2}//{2}\n".format(face[1] + 1, face[0] + 1, face[2] + 1))
+		write_model_file(f, mesh_points, norms, faces)
+
 	print("successfully created layout")
 
 def wgs_to_chunk(point):
@@ -139,7 +159,19 @@ def build_layout():
 
 	print(get_chunk_vectors(min_latitude, min_latitude))
 
-	build_mesh("mymodel.obj", min_latitude, max_latitude, min_longitude, max_longitude, lat_step=0.0005, long_step=0.0005)
+	if is_existing_project():
+		model_file = get_path_in_chunk() + os.sep + "mymodel.obj" 
+	else:
+		with tempfile.NamedTemporaryFile(dir='/tmp', delete=False, suffix='.obj') as tmpfile:
+			model_file = tmpfile.name
+	print(model_file)
+	build_mesh(model_file, min_latitude, max_latitude, min_longitude, max_longitude, lat_step=0.0005, long_step=0.0005)
+
+	chunk.importModel(model_file)
+
+	# delete temp file
+	if not is_existing_project():
+		os.remove(model_file)
 
 ps.app.addMenuItem("Workflow/Build Fast Layout", build_layout)
 #elevation_data = srtm.get_data()
