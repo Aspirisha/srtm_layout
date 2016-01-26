@@ -181,6 +181,7 @@ def revert_changes(chunk):
     for c in chunk.cameras:
         c.transform = None
 
+
 class DemImporter(QtCore.QObject):
     def __init__(self, parent=None):
         super(DemImporter, self).__init__(parent)
@@ -198,17 +199,22 @@ class DemImporter(QtCore.QObject):
         min_latitude, min_longitude, max_latitude, max_longitude = get_chunk_bounds(chunk)
         align_cameras(chunk, min_latitude, min_longitude, max_latitude, max_longitude)
         # TODO it makes sense to make tif cache common, so following is probably not to be used
+
+        if not is_existing_project():
+            print("Save project before importing dem!")
+            return
+
         tif_folder = os.path.join(get_path_in_chunk(), 'geotifs')
 
-        progress = QtGui.QProgressDialog(self.translator.translate('DemImporter', "Downloading DEMs..."),
-                                             self.translator.translate('DemImporter', "Cancel"), 0, 100, None)
+        progress = QtGui.QProgressDialog(self.translator.translate('dlg', "Downloading DEMs..."),
+                                             self.translator.translate('dlg', "Cancel"), 0, 100, None)
 
         def download_canceled():
             downloader.stop_running()
             while not downloader.isFinished():
                 time.sleep(0.1)
 
-        progress.setWindowTitle(self.translator.translate('DemImporter', 'Download progress'))
+        progress.setWindowTitle(self.translator.translate('dlg', 'Download progress'))
         progress.setWindowModality(QtCore.Qt.WindowModal)
         progress.canceled.connect(download_canceled)
         progress.resize(progress.sizeHint() + QtCore.QSize(30, 0))

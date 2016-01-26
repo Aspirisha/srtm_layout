@@ -310,9 +310,7 @@ def main( argv=None ):
     gdal.AllRegister()
     if argv is None:
         argv = sys.argv
-    print('argv is ' + str(argv))
     argv = gdal.GeneralCmdLineProcessor( argv )
-    print('argv is ' + str(argv))
     if argv is None:
         sys.exit( 0 )
 
