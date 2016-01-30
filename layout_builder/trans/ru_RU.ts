@@ -16,8 +16,12 @@
         <translation>Прогресс загрузки</translation>
     </message>
     <message>
-        <source>Workflow/Import SRTM DEM...</source>
-        <translation>Обработка/Импорт SRTM DEM...</translation>
+        <source>Tools/Import/Import SRTM DEM...</source>
+        <translation>Инструменты/Импорт/Импорт SRTM DEM...</translation>
+    </message>
+    <message>
+        <source>Workflow/Apply Vertical Camera Alignment...</source>
+        <translation>Обработка/Выровнять фотографии вертикально...</translation>
     </message>
 </context>
 </TS>

@@ -16,9 +16,13 @@
         <translation>Download progress</translation>
     </message>
     <message>
-        <source>Workflow/Import SRTM DEM...</source>
-        <translatorcomment>export QT_SELECT=qt5</translatorcomment>
-        <translation>Workflow/Import SRTM DEM...</translation>
+        <source>Tools/Import/Import SRTM DEM...</source>
+        <translation>Tools/Import/Import SRTM DEM...</translation>
+    </message>
+
+    <message>
+        <source>Workflow/Apply Vertical Camera Alignment...</source>
+        <translation>Workflow/Apply Vertical Camera Alignment...</translation>
     </message>
 </context>
 </TS>

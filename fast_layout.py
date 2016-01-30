@@ -286,7 +286,6 @@ class DemImporter(QtCore.QObject):
             return
 
         min_latitude, min_longitude, max_latitude, max_longitude = get_chunk_bounds(chunk)
-        align_cameras(chunk, min_latitude, min_longitude, max_latitude, max_longitude)
         # TODO it makes sense to make tif cache common, so following is probably not to be used
 
         if not is_existing_project():
@@ -368,13 +367,29 @@ class DemImporter(QtCore.QObject):
             os.remove(model_file)
         '''
 
+
 def run_import():
     importer = DemImporter()
     importer.import_dem()
 
-#print(translator.translate('dlg', "Workflow/Import SRTM DEM..."))
-ps.app.addMenuItem(get_translator(QtGui.QApplication.instance()).translate(
-        'dlg', "Workflow/Import SRTM DEM..."), run_import)
 
-#elevation_data = srtm.get_data()
-#print(elevation_data.get_elevation(57.1, 95.1, approximate=True))
+def run_camera_alignment():
+    doc = ps.app.document
+    chunk = doc.chunk
+
+    if not check_chunk(chunk):
+        return
+
+    min_latitude, min_longitude, max_latitude, max_longitude = get_chunk_bounds(chunk)
+    align_cameras(chunk, min_latitude, min_longitude, max_latitude, max_longitude)
+
+
+translator = get_translator(QtGui.QApplication.instance())
+ps.app.addMenuItem(translator.translate(
+        'dlg', "Tools/Import/Import SRTM DEM..."), run_import)
+
+try:
+    ps.app.addMenuItem(translator.translate(
+        'dlg', "Workflow/Apply Vertical Camera Alignment..."), run_camera_alignment)
+except Exception as e:
+    print(e)
