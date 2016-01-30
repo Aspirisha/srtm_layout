@@ -239,8 +239,8 @@ def apply_egm_offset(hgt_file):
 
     processed_files = os.path.join(output_path, 'processed.txt')
     for line in processed_files:
-        if line.strip() == hgt_wgs_file:
-            return hgt_wgs_file
+        if line.strip() == hgt_file:
+            return
 
     data = ctypes.create_string_buffer(2 * rows * cols)
     offset = 0
@@ -269,7 +269,6 @@ def apply_egm_offset(hgt_file):
 
     with open(processed_files, "a") as f:
         f.write(hgt_file + '\n')
-    return hgt_wgs_file
 
 
 class DemImporter(QtCore.QObject):
@@ -330,13 +329,16 @@ class DemImporter(QtCore.QObject):
         hgt_names = ''
         for hgt_file in downloader.hgt_names:
             full_hgt_name = os.path.join(hgts_folder, hgt_file)
-            result_hgt_file = apply_egm_offset(full_hgt_name)
+            apply_egm_offset(full_hgt_name)
             hgt_names += full_hgt_name + ' '
 
         merged_tif = os.path.join(hgts_folder, 'result.tif')
 
-        print('gdalwarp ' + hgt_names + merged_tif)
-        os.system('gdalwarp ' + hgt_names + merged_tif)
+        clip_bounds = ' -te {} {} {} {} '.format(
+                min_longitude, min_latitude, max_longitude, max_latitude)
+        print(clip_bounds)
+        gdal_command = 'gdalwarp ' + clip_bounds + hgt_names + merged_tif
+        os.system(gdal_command) # + ' "+proj=longlat +ellps=WGS84"'
         chunk.importDem(merged_tif)
         '''
         full_tif_names = downloader.get_full_tif_names()
