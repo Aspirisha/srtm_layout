@@ -1,6 +1,4 @@
-delaunay/
 numpy/
-requests/
-srtm*
+srtm.py/
 __pycache__/
 *.pyc

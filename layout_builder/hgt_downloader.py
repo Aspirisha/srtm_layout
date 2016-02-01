@@ -2,7 +2,7 @@ import os
 from . import util
 from PySide import QtCore, QtGui
 import srtm
-import time
+
 
 class HGTDownloader(QtCore.QThread):
     update_current_progress = QtCore.Signal(int)
