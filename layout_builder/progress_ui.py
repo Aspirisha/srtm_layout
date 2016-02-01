@@ -47,5 +47,5 @@ class Ui_Dialog(object):
         self.pause.setText(QtGui.QApplication.translate("Dialog", "Pause", None, QtGui.QApplication.UnicodeUTF8))
         self.cancel.setText(QtGui.QApplication.translate("Dialog", "Cancel", None, QtGui.QApplication.UnicodeUTF8))
         self.current_label.setText(QtGui.QApplication.translate("Dialog", "TextLabel", None, QtGui.QApplication.UnicodeUTF8))
-        self.overall_label.setText(QtGui.QApplication.translate("Dialog", "Overal progress:", None, QtGui.QApplication.UnicodeUTF8))
+        self.overall_label.setText(QtGui.QApplication.translate("Dialog", "Overall progress:", None, QtGui.QApplication.UnicodeUTF8))
 

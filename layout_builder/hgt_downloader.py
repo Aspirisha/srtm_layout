@@ -73,8 +73,9 @@ class HGTDownloader(QtCore.QThread):
         self.check_pause()
         clip_bounds = ' -te {} {} {} {} '.format(
                 self.min_lon, self.min_lat, self.max_lon, self.max_lat)
+        output_format = '-ot Float32 '
 
-        gdal_command = 'gdalwarp ' + clip_bounds + self.full_hgt_names + self.merged_tif
+        gdal_command = 'gdalwarp ' + output_format + clip_bounds + self.full_hgt_names + self.merged_tif
         print('using gdal to produce tiff. Gdal commands is "' + gdal_command + '"')
         os.system(gdal_command) # + ' "+proj=longlat +ellps=WGS84"'
 

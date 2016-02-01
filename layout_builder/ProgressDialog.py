@@ -11,7 +11,6 @@ class ProgressDialog(QtGui.QDialog):
         self.ui = progress_ui.Ui_Dialog()
         self.ui.setupUi(self)
         self.ui.retranslateUi(self)
-        print('here')
 
     def on_cancel(self):
         self.canceled.emit()
@@ -20,7 +19,8 @@ class ProgressDialog(QtGui.QDialog):
         self.paused.emit()
 
     def set_current_label_text(self, text):
-        self.ui.current_label.setText(text)
+        translated = QtGui.QApplication.translate('Dialog', text)
+        self.ui.current_label.setText(translated)
 
     def set_overall_progress(self, progress):
         self.ui.overall_progress.setValue(progress)

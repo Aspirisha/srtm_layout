@@ -19,13 +19,27 @@
     </message>
     <message>
         <location filename="../progress_ui.py" line="49"/>
-        <source>Overal progress</source>
-        <translation>Общий прогресс</translation>
+        <source>Overall progress:</source>
+        <translation>Общий прогресс:</translation>
     </message>
     <message>
         <location filename="../progress_ui.py" line="45"/>
         <source>Importing SRTM DEM</source>
         <translation>Импорт SRTM DEM</translation>
+    </message>
+    <message>
+        <source>Downloading .hgt files...</source>
+        <translation>Загрузка .hgt файлов...</translation>
+    </message>
+
+    <message>
+        <source>Converting .hgt files from EGM to WGS-84</source>
+        <translation>Конвертирование .hgt файлов...</translation>
+    </message>
+
+    <message>
+        <source>Merging .hgt files into tif</source>
+        <translation>Склеивание .hgt файлов в tiff</translation>
     </message>
 </context>
 <context>

@@ -27,6 +27,21 @@
         <source>Importing SRTM DEM</source>
         <translation type="unfinished"></translation>
     </message>
+
+    <message>
+        <source>Downloading .hgt files...</source>
+        <translation type="unfinished"></translation>
+    </message>
+
+    <message>
+        <source>Converting .hgt files from EGM to WGS-84</source>
+        <translation type="unfinished"></translation>
+    </message>
+
+    <message>
+        <source>Merging .hgt files into tif</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>dlg</name>
