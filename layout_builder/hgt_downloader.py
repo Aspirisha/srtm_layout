@@ -1,11 +1,8 @@
-from io import BytesIO
-import urllib, zipfile
 import os
-from math import floor, ceil
 from . import util
 from PySide import QtCore, QtGui
 import srtm
-import PhotoScan as ps
+import time
 
 class HGTDownloader(QtCore.QThread):
     update_current_progress = QtCore.Signal(int)
@@ -24,8 +21,23 @@ class HGTDownloader(QtCore.QThread):
         self.hgt_names = self.get_hgt_names()
         self.percent_per_file = 100.0 / len(self.hgt_names)
         self.stopped = False
+        self.paused = False
+        self.mutex = QtCore.QMutex()
         self.merged_tif = os.path.join(self.hgts_folder, 'result.tif')
         self.full_hgt_names = ''
+
+    def set_paused(self, paused):
+        success = False
+        if paused == self.paused:
+            return
+
+        while not success:
+            try:
+                self.mutex.lock()
+                self.paused = paused
+                success = True
+            finally:
+                self.mutex.unlock()
 
     def stop_running(self):
         self.stopped = True
@@ -33,10 +45,16 @@ class HGTDownloader(QtCore.QThread):
     def continue_run(self):
         self.stopped = False
 
+    def check_pause(self):
+        while self.paused:
+            QtCore.QThread.msleep(100)
+
+
     def download_files(self):
         downloaded_files = 0
         for name in self.hgt_names:
             print('downloading ' + name + '...')
+            self.check_pause()
             self.elevation_data.retrieve_or_load_file_data(name)
             downloaded_files += 1
             self.update_current_progress.emit(int(downloaded_files * self.percent_per_file))
@@ -45,12 +63,14 @@ class HGTDownloader(QtCore.QThread):
         processed_files = 0
         for hgt_file in self.hgt_names:
             print('applying offset to ' + hgt_file + '...')
+            self.check_pause()
             full_hgt_name = os.path.join(self.hgts_folder, hgt_file)
             util.apply_egm_offset(full_hgt_name)
             self.full_hgt_names += full_hgt_name + ' '
             self.update_current_progress.emit(int(processed_files * self.percent_per_file))
 
     def merge_hgts_to_tiff(self):
+        self.check_pause()
         clip_bounds = ' -te {} {} {} {} '.format(
                 self.min_lon, self.min_lat, self.max_lon, self.max_lat)
 

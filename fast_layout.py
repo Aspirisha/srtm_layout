@@ -5,13 +5,9 @@ import os, sys
 from layout_builder.DelaunayVoronoi import computeDelaunayTriangulation
 import numpy as np
 from osgeo import gdal
-import tempfile
 import time
 from layout_builder import util, hgt_downloader, gdal_merge, ProgressDialog
 from PySide import QtCore, QtGui
-import re
-import struct
-import ctypes
 
 support_directory = os.path.dirname(os.path.realpath(__file__)) + os.sep + u'layout_builder'
 support_directory = str(support_directory.encode(sys.getfilesystemencoding()), 'utf8')
@@ -216,11 +212,16 @@ class DemImporter(QtCore.QObject):
 
         def download_canceled():
             downloader.stop_running()
+            downloader.terminate()
             while not downloader.isFinished():
                 time.sleep(0.1)
 
+        def download_paused():
+            downloader.set_paused(not downloader.paused)
+
         progress_dialog = ProgressDialog.ProgressDialog()
         progress_dialog.canceled.connect(download_canceled)
+        progress_dialog.paused.connect(download_paused)
 
         hgts_folder = os.path.join(get_path_in_chunk(), '.srtm')
         tif_folder = os.path.join(get_path_in_chunk(), 'geotifs')
@@ -230,6 +231,7 @@ class DemImporter(QtCore.QObject):
         downloader.update_current_progress.connect(progress_dialog.set_current_progress)
         downloader.update_overall_progress.connect(progress_dialog.set_overall_progress)
         downloader.set_current_task_name.connect(progress_dialog.set_current_label_text)
+
         downloader.start()
         progress_dialog.show()
 

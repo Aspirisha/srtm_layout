@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>292</width>
-    <height>181</height>
+    <width>335</width>
+    <height>183</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -20,8 +20,8 @@
    <property name="geometry">
     <rect>
      <x>20</x>
-     <y>10</y>
-     <width>241</width>
+     <y>40</y>
+     <width>291</width>
      <height>23</height>
     </rect>
    </property>
@@ -33,8 +33,8 @@
    <property name="geometry">
     <rect>
      <x>20</x>
-     <y>80</y>
-     <width>241</width>
+     <y>100</y>
+     <width>291</width>
      <height>23</height>
     </rect>
    </property>
@@ -45,7 +45,7 @@
   <widget class="QPushButton" name="pause">
    <property name="geometry">
     <rect>
-     <x>30</x>
+     <x>50</x>
      <y>140</y>
      <width>99</width>
      <height>27</height>
@@ -58,7 +58,7 @@
   <widget class="QPushButton" name="cancel">
    <property name="geometry">
     <rect>
-     <x>150</x>
+     <x>170</x>
      <y>140</y>
      <width>99</width>
      <height>27</height>
@@ -72,8 +72,8 @@
    <property name="geometry">
     <rect>
      <x>20</x>
-     <y>40</y>
-     <width>231</width>
+     <y>15</y>
+     <width>281</width>
      <height>20</height>
     </rect>
    </property>
@@ -81,23 +81,23 @@
     <string>TextLabel</string>
    </property>
    <property name="alignment">
-    <set>Qt::AlignCenter</set>
+    <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
    </property>
   </widget>
   <widget class="QLabel" name="overall_label">
    <property name="geometry">
     <rect>
-     <x>30</x>
-     <y>110</y>
+     <x>20</x>
+     <y>75</y>
      <width>221</width>
      <height>20</height>
     </rect>
    </property>
    <property name="text">
-    <string>Overal progress</string>
+    <string>Overal progress:</string>
    </property>
    <property name="alignment">
-    <set>Qt::AlignCenter</set>
+    <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
    </property>
   </widget>
  </widget>
@@ -119,9 +119,27 @@
     </hint>
    </hints>
   </connection>
+  <connection>
+   <sender>pause</sender>
+   <signal>clicked()</signal>
+   <receiver>Dialog</receiver>
+   <slot>on_pause()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>79</x>
+     <y>153</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>145</x>
+     <y>90</y>
+    </hint>
+   </hints>
+  </connection>
  </connections>
  <slots>
   <signal>canceled()</signal>
+  <signal>paused()</signal>
   <slot>on_cancel()</slot>
+  <slot>on_pause()</slot>
  </slots>
 </ui>

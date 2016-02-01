@@ -58,10 +58,11 @@ def apply_egm_offset(hgt_file):
     hgt_wgs_file = os.path.join(output_path, output_name)
 
     processed_files = os.path.join(output_path, 'processed.txt')
-    with open(processed_files, 'r') as f:
-        for line in f:
-            if line.strip() == hgt_file:
-                return
+    if os.path.exists(processed_files):
+        with open(processed_files, 'r') as f:
+            for line in f:
+                if line.strip() == hgt_file:
+                    return
 
     data = ctypes.create_string_buffer(2 * rows * cols)
     offset = 0
