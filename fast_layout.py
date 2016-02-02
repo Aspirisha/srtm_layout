@@ -83,53 +83,52 @@ def write_model_file(f, points, normals, faces):
 
 
 def build_mesh(output_file, min_latitude, max_latitude, min_longitude, max_longitude, lat_step, long_step, need_download=True):
-    handler = util.SpecificFolderFileHandler(os.path.join(get_path_in_chunk(), '.srtm'))
-    elevation_data = srtm.get_data(file_handler=handler)
+    try:
+        handler = util.SpecificFolderFileHandler(os.path.join(get_path_in_chunk(), '.srtm'))
+        elevation_data = srtm.get_data(file_handler=handler)
 
-    get_height = lambda x,y: elevation_data.get_elevation(x, y, approximate=True)
+        get_height = lambda x,y: elevation_data.get_elevation(x, y, approximate=True)
 
-    print(get_height(min_latitude, min_longitude))
-    if not need_download:
-        chunk = ps.app.document.chunk
-        if chunk.elevation is None:
-            print("No elevation is provided for chunk. Downloading...")
-        else:
-            pass
-            #get_height =
+        print(get_height(min_latitude, min_longitude))
 
+        mesh_points = np.array([[longitude, latitude, get_height(latitude, longitude) ]
+            for latitude in util.frange(min_latitude, max_latitude, lat_step)
+            for longitude in util.frange(min_longitude, max_longitude, long_step)])
 
-    mesh_points = np.array([[longitude, latitude, get_height(latitude, longitude) ]
-        for latitude in util.frange(min_latitude, max_latitude, lat_step)
-        for longitude in util.frange(min_longitude, max_longitude, long_step)])
+        print('mesh points length is ' + str(mesh_points.shape))
+        last_ok = 0
+        for p in mesh_points:
+            if p[2] is None:
+                p[2] = last_ok
+            else:
+                last_ok = p[2]
 
-    print('mesh points length is ' + str(mesh_points.shape))
-    last_ok = 0
-    for p in mesh_points:
-        if p[2] is None:
-            p[2] = last_ok
-        else:
-            last_ok = p[2]
+        points = [ps.Vector(p) for p in mesh_points]
+        faces = np.array(computeDelaunayTriangulation(points))
+        norms = np.zeros(mesh_points.shape, dtype=mesh_points.dtype)
 
-    points = [ps.Vector(p) for p in mesh_points]
-    faces = np.array(computeDelaunayTriangulation(points))
-    norms = np.zeros(mesh_points.shape, dtype=mesh_points.dtype)
+        tris = mesh_points[faces]
+        # normals for all triangles
+        n = np.cross( tris[::,1 ] - tris[::,0]  , tris[::,2 ] - tris[::,0] )
+        normalize_v3(n)
+        norms[ faces[:,0] ] += n
+        norms[ faces[:,1] ] += n
+        norms[ faces[:,2] ] += n
+        normalize_v3(norms)
 
-    tris = mesh_points[faces]
-    # normals for all triangles
-    n = np.cross( tris[::,1 ] - tris[::,0]  , tris[::,2 ] - tris[::,0] )
-    normalize_v3(n)
-    norms[ faces[:,0] ] += n
-    norms[ faces[:,1] ] += n
-    norms[ faces[:,2] ] += n
-    normalize_v3(norms)
+        with open(output_file, "w") as f:
+            write_model_file(f, mesh_points, norms, faces)
+        print("Successfully built mesh")
 
-    with open(output_file, "w") as f:
-        write_model_file(f, mesh_points, norms, faces)
+        ps.app.document.chunk.importModel(output_file)
+        print("Mesh imported")
+    except Exception as e:
+        print(e)
 
-    print("successfully built mesh")
 
 def wgs_to_chunk(chunk, point):
     return chunk.transform.matrix.inv().mulp(chunk.crs.unproject(point))
+
 
 def check_chunk(chunk):
     if chunk is None or len(chunk.cameras) == 0:
@@ -142,11 +141,12 @@ def check_chunk(chunk):
 
     return True
 
+
 def get_chunk_bounds(chunk):
-    min_latitude = min(c.reference.location[1] for c in chunk.cameras)
-    max_latitude = max(c.reference.location[1] for c in chunk.cameras)
-    min_longitude =  min(c.reference.location[0] for c in chunk.cameras)
-    max_longitude =  max(c.reference.location[0] for c in chunk.cameras)
+    min_latitude = min(c.reference.location[1] for c in chunk.cameras if c.reference.location is not None)
+    max_latitude = max(c.reference.location[1] for c in chunk.cameras if c.reference.location is not None)
+    min_longitude =  min(c.reference.location[0] for c in chunk.cameras if c.reference.location is not None)
+    max_longitude =  max(c.reference.location[0] for c in chunk.cameras if c.reference.location is not None)
     delta_latitude = max_latitude - min_latitude
     delta_longitude = max_longitude - min_longitude
     min_longitude -= delta_longitude
@@ -173,15 +173,23 @@ def align_cameras(chunk, min_latitude, min_longitude, max_latitude, max_longitud
     scales = [delta_latitude_scale_to_meters * delta_meters_scale_to_chunk,
         delta_longitude_scale_to_meters * delta_meters_scale_to_chunk, delta_meters_scale_to_chunk]
 
+    positive_dir = chunk.cameras[1].reference.location - chunk.cameras[0].reference.location
+    positive_dir.z = 0
+    positive_dir.normalize()
+    prev_location = chunk.cameras[0].reference.location
     i, j, k = get_chunk_vectors(min_latitude, min_longitude) # i || North
     for c in chunk.cameras:
         location = c.reference.location
-
+        dir = location - prev_location
+        dir.z = 0
+        dir.normalize()
+        sign = -1 if dir * positive_dir < 0 else 1
         chunk_coordinates = wgs_to_chunk(chunk, location)
-        c.transform = ps.Matrix([[i.x, j.x, k.x, chunk_coordinates[0]],
-                                 [i.y, j.y, k.y, chunk_coordinates[1]],
-                                 [i.z, j.z, k.z, chunk_coordinates[2]],
+        c.transform = ps.Matrix([[sign * i.x, sign * j.x, k.x, chunk_coordinates[0]],
+                                 [sign * i.y, sign * j.y, k.y, chunk_coordinates[1]],
+                                 [sign * i.z, sign * j.z, k.z, chunk_coordinates[2]],
                                  [0, 0, 0, 1]])
+        prev_location = location
 
 
 def revert_changes(chunk):
@@ -289,8 +297,23 @@ def run_camera_alignment():
     align_cameras(chunk, min_latitude, min_longitude, max_latitude, max_longitude)
 
 
+def import_srtm_mesh():
+    doc = ps.app.document
+    chunk = doc.chunk
+
+    if not check_chunk(chunk):
+        return
+
+    min_latitude, min_longitude, max_latitude, max_longitude = get_chunk_bounds(chunk)
+    mesh_file = os.path.join(get_path_in_chunk(), '.srtm', 'model.obj')
+    print('here')
+    build_mesh(mesh_file, min_latitude, max_latitude, min_longitude, max_longitude, 0.001, 0.001)
+
+
 translator = get_translator(QtGui.QApplication.instance())
 ps.app.addMenuItem(translator.translate(
         'dlg', "Tools/Import/Import SRTM DEM..."), run_import)
 ps.app.addMenuItem(translator.translate(
     'dlg', "Workflow/Apply Vertical Camera Alignment..."), run_camera_alignment)
+ps.app.addMenuItem(translator.translate(
+        'dlg', "Tools/Import/Import SRTM mesh..."), import_srtm_mesh)

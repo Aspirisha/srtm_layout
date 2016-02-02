@@ -70,5 +70,9 @@
         <source>Workflow/Apply Vertical Camera Alignment...</source>
         <translation>Workflow/Apply Vertical Camera Alignment...</translation>
     </message>
+    <message>
+        <source>Tools/Import/Import SRTM mesh...</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 </TS>

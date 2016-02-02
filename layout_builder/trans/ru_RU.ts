@@ -69,5 +69,10 @@
         <source>Workflow/Apply Vertical Camera Alignment...</source>
         <translation>Обработка/Выровнять фотографии вертикально...</translation>
     </message>
+    <message>
+        <source>Tools/Import/Import SRTM mesh...</source>
+        <translation>Инструменты/Импорт/Импорт SRTM модели...</translation>
+    </message>
+
 </context>
 </TS>
