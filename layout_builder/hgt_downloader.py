@@ -9,7 +9,7 @@ class HGTDownloader(QtCore.QThread):
     update_overall_progress = QtCore.Signal(int)
     set_current_task_name = QtCore.Signal(str)
 
-    def __init__(self, min_lat, min_lon, max_lat, max_lon, hgts_folder):
+    def __init__(self, min_lat, min_lon, max_lat, max_lon, hgts_folder, tasks):
         QtCore.QThread.__init__(self)
         self.hgts_folder = hgts_folder
         handler = util.SpecificFolderFileHandler(hgts_folder)
@@ -25,6 +25,7 @@ class HGTDownloader(QtCore.QThread):
         self.mutex = QtCore.QMutex()
         self.merged_tif = os.path.join(self.hgts_folder, 'result.tif')
         self.full_hgt_names = ''
+        self.tasks = tasks
 
     def set_paused(self, paused):
         success = False
@@ -80,18 +81,25 @@ class HGTDownloader(QtCore.QThread):
         os.system(gdal_command) # + ' "+proj=longlat +ellps=WGS84"'
 
     def run(self):
+        progress_per_task = 100 / len(self.tasks)
+        overall_progress = 100 / len(self.tasks)
+
         self.set_current_task_name.emit("Downloading .hgt files...")
         self.download_files()
 
-        self.update_overall_progress.emit(33)
-        self.update_current_progress.emit(0)
-        self.set_current_task_name.emit("Converting .hgt files from EGM to WGS-84")
-        self.apply_offset_to_files()
+        if 'convert' in self.tasks:
+            self.update_overall_progress.emit(overall_progress)
+            self.update_current_progress.emit(0)
+            self.set_current_task_name.emit("Converting .hgt files from EGM to WGS-84")
+            self.apply_offset_to_files()
+            overall_progress += progress_per_task
 
-        self.update_overall_progress.emit(66)
-        self.update_current_progress.emit(0)
-        self.set_current_task_name.emit("Merging .hgt files into tif")
-        self.merge_hgts_to_tiff()
+        if 'merge' in self.tasks:
+            self.update_overall_progress.emit(overall_progress)
+            self.update_current_progress.emit(0)
+            self.set_current_task_name.emit("Merging .hgt files into tif")
+            self.merge_hgts_to_tiff()
+            overall_progress += progress_per_task
 
     def get_hgt_names(self):
         step = 0.01

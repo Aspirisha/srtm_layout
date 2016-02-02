@@ -12,6 +12,13 @@ def frange(x, y, jump):
         x += jump
 
 
+class Enum(set):
+    def __getattr__(self, name):
+        if name in self:
+            return name
+        raise AttributeError
+
+
 class SpecificFolderFileHandler(srtm.FileHandler):
     def __init__(self, cache_folder=None):
         self.cache_folder = cache_folder

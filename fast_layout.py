@@ -35,6 +35,9 @@ def get_translator(qtapp):
     qtapp.installTranslator(translator)
     return translator
 
+def get_hgts_folder():
+    return os.path.join(get_path_in_chunk(), '.srtm')
+
 
 def get_path_in_chunk():
     chunk = ps.app.document.chunk
@@ -84,10 +87,16 @@ def write_model_file(f, points, normals, faces):
 
 def build_mesh(output_file, min_latitude, max_latitude, min_longitude, max_longitude, lat_step, long_step, need_download=True):
     try:
-        handler = util.SpecificFolderFileHandler(os.path.join(get_path_in_chunk(), '.srtm'))
-        elevation_data = srtm.get_data(file_handler=handler)
-
-        get_height = lambda x,y: elevation_data.get_elevation(x, y, approximate=True)
+        hgts_folder = get_hgts_folder()
+        downloader_tasks = ['convert']
+        downloader = hgt_downloader.HGTDownloader(min_latitude, min_longitude,
+                                                  max_latitude, max_longitude, hgts_folder,
+                                                  downloader_tasks)
+        if not run_downloader(downloader):
+            return
+        print('hhhh')
+        def get_height(x, y):
+            downloader.elevation_data.get_elevation(x, y, approximate=True)
 
         print(get_height(min_latitude, min_longitude))
 
@@ -197,6 +206,34 @@ def revert_changes(chunk):
         c.transform = None
 
 
+def run_downloader(downloader):
+    def download_canceled():
+        downloader.stop_running()
+        downloader.terminate()
+        while not downloader.isFinished():
+            time.sleep(0.1)
+
+    def download_paused():
+        downloader.set_paused(not downloader.paused)
+
+    progress_dialog = ProgressDialog.ProgressDialog()
+    progress_dialog.canceled.connect(download_canceled)
+    progress_dialog.paused.connect(download_paused)
+
+    downloader.update_current_progress.connect(progress_dialog.set_current_progress)
+    downloader.update_overall_progress.connect(progress_dialog.set_overall_progress)
+    downloader.set_current_task_name.connect(progress_dialog.set_current_label_text)
+
+    downloader.start()
+    progress_dialog.show()
+
+    while downloader.isRunning():
+        QtGui.qApp.processEvents()
+        time.sleep(0.1)
+
+    return not downloader.stopped
+
+
 class DemImporter(QtCore.QObject):
     def __init__(self, parent=None):
         super(DemImporter, self).__init__(parent)
@@ -218,67 +255,18 @@ class DemImporter(QtCore.QObject):
             print("Save project before importing dem!")
             return
 
-        def download_canceled():
-            downloader.stop_running()
-            downloader.terminate()
-            while not downloader.isFinished():
-                time.sleep(0.1)
-
-        def download_paused():
-            downloader.set_paused(not downloader.paused)
-
-        progress_dialog = ProgressDialog.ProgressDialog()
-        progress_dialog.canceled.connect(download_canceled)
-        progress_dialog.paused.connect(download_paused)
-
         hgts_folder = os.path.join(get_path_in_chunk(), '.srtm')
         tif_folder = os.path.join(get_path_in_chunk(), 'geotifs')
 
+        downloader_tasks = ['convert', 'merge']
         downloader = hgt_downloader.HGTDownloader(min_latitude, min_longitude,
-                                                   max_latitude, max_longitude, hgts_folder)
-        downloader.update_current_progress.connect(progress_dialog.set_current_progress)
-        downloader.update_overall_progress.connect(progress_dialog.set_overall_progress)
-        downloader.set_current_task_name.connect(progress_dialog.set_current_label_text)
+                                                  max_latitude, max_longitude, hgts_folder,
+                                                  downloader_tasks)
 
-        downloader.start()
-        progress_dialog.show()
-
-        while downloader.isRunning():
-            QtGui.qApp.processEvents()
-            time.sleep(0.1)
-
-        if downloader.stopped:
+        if not run_downloader(downloader):
             revert_changes(chunk)
             return
-
         chunk.importDem(downloader.merged_tif)
-        '''
-        full_tif_names = downloader.get_full_tif_names()
-
-        merged_tif = os.path.join(tif_folder, 'tmp.tif')
-        argv = ['gdal_merge.py', '-o', merged_tif]
-        argv.extend(full_tif_names)
-
-        if not os.path.isdir(tif_folder):
-            os.mkdir(tif_folder)
-        gdal_merge.main(argv)
-        chunk.importDem(merged_tif)'''
-
-
-        '''
-        if is_existing_project():
-            model_file = get_path_in_chunk() + os.sep + "mymodel.obj"
-        else:
-            with tempfile.NamedTemporaryFile(dir='/tmp', delete=False, suffix='.obj') as tmpfile:
-                model_file = tmpfile.name
-        build_mesh(model_file, min_latitude, max_latitude, min_longitude, max_longitude, lat_step=0.0005, long_step=0.0005)
-
-        chunk.importModel(model_file)
-
-        # delete temp file
-        if not is_existing_project():
-            os.remove(model_file)
-        '''
 
 
 def run_import():
@@ -306,7 +294,6 @@ def import_srtm_mesh():
 
     min_latitude, min_longitude, max_latitude, max_longitude = get_chunk_bounds(chunk)
     mesh_file = os.path.join(get_path_in_chunk(), '.srtm', 'model.obj')
-    print('here')
     build_mesh(mesh_file, min_latitude, max_latitude, min_longitude, max_longitude, 0.001, 0.001)
 
 
