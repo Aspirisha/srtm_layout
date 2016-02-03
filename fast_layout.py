@@ -86,53 +86,48 @@ def write_model_file(f, points, normals, faces):
 
 
 def build_mesh(output_file, min_latitude, max_latitude, min_longitude, max_longitude, lat_step, long_step, need_download=True):
-    try:
-        hgts_folder = get_hgts_folder()
-        downloader_tasks = ['convert']
-        downloader = hgt_downloader.HGTDownloader(min_latitude, min_longitude,
-                                                  max_latitude, max_longitude, hgts_folder,
-                                                  downloader_tasks)
-        if not run_downloader(downloader):
-            return
-        print('hhhh')
-        def get_height(x, y):
-            downloader.elevation_data.get_elevation(x, y, approximate=True)
+    hgts_folder = get_hgts_folder()
+    downloader_tasks = ['convert']
+    downloader = hgt_downloader.HGTDownloader(min_latitude, min_longitude,
+                                              max_latitude, max_longitude, hgts_folder,
+                                              downloader_tasks)
+    if not run_downloader(downloader):
+        return
 
-        print(get_height(min_latitude, min_longitude))
+    def get_height(x, y):
+        downloader.elevation_data.get_elevation(x, y, approximate=True)
 
-        mesh_points = np.array([[longitude, latitude, get_height(latitude, longitude) ]
-            for latitude in util.frange(min_latitude, max_latitude, lat_step)
-            for longitude in util.frange(min_longitude, max_longitude, long_step)])
+    mesh_points = np.array([[longitude, latitude, get_height(latitude, longitude) ]
+        for latitude in util.frange(min_latitude, max_latitude, lat_step)
+        for longitude in util.frange(min_longitude, max_longitude, long_step)])
 
-        print('mesh points length is ' + str(mesh_points.shape))
-        last_ok = 0
-        for p in mesh_points:
-            if p[2] is None:
-                p[2] = last_ok
-            else:
-                last_ok = p[2]
+    last_ok = 0
+    for p in mesh_points:
+        if p[2] is None:
+            p[2] = last_ok
+        else:
+            last_ok = p[2]
 
-        points = [ps.Vector(p) for p in mesh_points]
-        faces = np.array(computeDelaunayTriangulation(points))
-        norms = np.zeros(mesh_points.shape, dtype=mesh_points.dtype)
+    points = [ps.Vector(p) for p in mesh_points]
+    faces = np.array(computeDelaunayTriangulation(points))
+    norms = np.zeros(mesh_points.shape, dtype=mesh_points.dtype)
 
-        tris = mesh_points[faces]
-        # normals for all triangles
-        n = np.cross( tris[::,1 ] - tris[::,0]  , tris[::,2 ] - tris[::,0] )
-        normalize_v3(n)
-        norms[ faces[:,0] ] += n
-        norms[ faces[:,1] ] += n
-        norms[ faces[:,2] ] += n
-        normalize_v3(norms)
+    tris = mesh_points[faces]
+    # normals for all triangles
+    n = np.cross( tris[::,1 ] - tris[::,0]  , tris[::,2 ] - tris[::,0] )
+    normalize_v3(n)
+    norms[ faces[:,0] ] += n
+    norms[ faces[:,1] ] += n
+    norms[ faces[:,2] ] += n
+    normalize_v3(norms)
 
-        with open(output_file, "w") as f:
-            write_model_file(f, mesh_points, norms, faces)
-        print("Successfully built mesh")
+    with open(output_file, "w") as f:
+        write_model_file(f, mesh_points, norms, faces)
+    print("Successfully built mesh")
 
-        ps.app.document.chunk.importModel(output_file)
-        print("Mesh imported")
-    except Exception as e:
-        print(e)
+    ps.app.document.chunk.importModel(output_file)
+    print("Mesh imported")
+
 
 
 def wgs_to_chunk(chunk, point):
@@ -187,6 +182,19 @@ def align_cameras(chunk, min_latitude, min_longitude, max_latitude, max_longitud
     positive_dir.normalize()
     prev_location = chunk.cameras[0].reference.location
     i, j, k = get_chunk_vectors(min_latitude, min_longitude) # i || North
+
+    north = ps.Vector([0,1,0])
+    cosfi = north * positive_dir
+
+    fi = math.pi - math.acos(cosfi)
+    sinfi = math.sin(fi)
+    if sinfi * positive_dir.x < 0:
+        fi = -fi
+    print('rotate photos with ' + str(fi * 180 / math.pi) + 'degrees')
+    new_i = i * math.cos(fi) + j * math.sin(fi)
+    new_j = j * math.cos(fi) - i * math.sin(fi)
+    i = new_i
+    j = new_j
     for c in chunk.cameras:
         location = c.reference.location
         dir = location - prev_location
@@ -256,7 +264,6 @@ class DemImporter(QtCore.QObject):
             return
 
         hgts_folder = os.path.join(get_path_in_chunk(), '.srtm')
-        tif_folder = os.path.join(get_path_in_chunk(), 'geotifs')
 
         downloader_tasks = ['convert', 'merge']
         downloader = hgt_downloader.HGTDownloader(min_latitude, min_longitude,
