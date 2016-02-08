@@ -1,0 +1,4 @@
+numpy/
+srtm.py/
+__pycache__/
+*.pyc
