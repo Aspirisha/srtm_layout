@@ -169,9 +169,10 @@ def get_chunk_bounds(chunk):
 
 
 def align_cameras(chunk, min_latitude, min_longitude, max_latitude, max_longitude):
-    chunk.transform.scale = 1
-    chunk.transform.rotation = ps.Matrix([[1,0,0], [0,1,0], [0,0,1]])
-    chunk.transform.translation = ps.Vector([0,0,0])
+    if chunk.transform.scale is None:
+        chunk.transform.scale = 1
+        chunk.transform.rotation = ps.Matrix([[1,0,0], [0,1,0], [0,0,1]])
+        chunk.transform.translation = ps.Vector([0,0,0])
 
     delta_latitude_scale_to_meters = 40008000 / 360
 
@@ -189,30 +190,18 @@ def align_cameras(chunk, min_latitude, min_longitude, max_latitude, max_longitud
     prev_location = chunk.cameras[0].reference.location
     i, j, k = get_chunk_vectors(min_latitude, min_longitude) # i || North
 
-    north = ps.Vector([0,1,0])
-    cosfi = north * positive_dir
-
-    fi = math.acos(cosfi)
-    sinfi = math.sin(fi)
-    fi += math.pi / 2
-    if sinfi * positive_dir.x < 0:
-        fi = -fi
-
-    print('rotate photos with ' + str(fi * 180 / math.pi) + ' degrees')
-    i, j = i * math.cos(fi) + j * math.sin(fi), j * math.cos(fi) - i * math.sin(fi)
 
     for c in chunk.cameras:
         location = c.reference.location
-        dir = location - prev_location
-        dir.z = 0
-        dir.normalize()
-        sign = -1 if dir * positive_dir < 0 else 1
         chunk_coordinates = wgs_to_chunk(chunk, location)
-        c.transform = ps.Matrix([[sign * i.x, sign * j.x, k.x, chunk_coordinates[0]],
-                                 [sign * i.y, sign * j.y, k.y, chunk_coordinates[1]],
-                                 [sign * i.z, sign * j.z, k.z, chunk_coordinates[2]],
+        fi = math.radians(c.reference.rotation.x + 90)
+
+        print(fi)
+        ii, jj = i * math.cos(fi) + j * math.sin(fi), j * math.cos(fi) - i * math.sin(fi)
+        c.transform = ps.Matrix([[ii.x, jj.x, k.x, chunk_coordinates[0]],
+                                 [ii.y, jj.y, k.y, chunk_coordinates[1]],
+                                 [ii.z, jj.z, k.z, chunk_coordinates[2]],
                                  [0, 0, 0, 1]])
-        prev_location = location
 
 
 def revert_changes(chunk):
