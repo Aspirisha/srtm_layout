@@ -182,7 +182,7 @@ def get_xy_distance(v1, v2):
 
 
 def get_camera_calibration(chunk):
-    request = "Insert number of photos to estimate camera clibration"
+    request = "Insert number of photos to estimate camera calibration"
     cameras_number_for_align = request_integer(request, 10)
     for c in chunk.cameras:
         c.enabled = False

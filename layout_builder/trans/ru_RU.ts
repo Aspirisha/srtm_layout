@@ -82,7 +82,7 @@
         <translation>Нет координатной привязки камер.</translation>
     </message>
     <message>
-        <source>Insert number of photos to estimate camera clibration</source>
+        <source>Insert number of photos to estimate camera calibration</source>
         <translation>Выберите число фотографий для оценки калибровки камеры.</translation>
     </message>
     

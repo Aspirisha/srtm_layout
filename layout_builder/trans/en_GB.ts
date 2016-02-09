@@ -83,7 +83,7 @@
         <translation>Initialize chunk coordinate system first</translation>
     </message>
     <message>
-        <source>Insert number of photos to estimate camera clibration</source>
+        <source>Insert number of photos to estimate camera calibration</source>
          <translation>Insert number of photos to estimate camera clibration</translation>
     </message>
 </context>
