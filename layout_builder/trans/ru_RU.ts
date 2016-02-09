@@ -81,5 +81,10 @@
         <source>Initialize chunk coordinate system first</source>
         <translation>Нет координатной привязки камер.</translation>
     </message>
+    <message>
+        <source>Insert number of photos to estimate camera clibration</source>
+        <translation>Выберите число фотографий для оценки калибровки камеры.</translation>
+    </message>
+    
 </context>
 </TS>

@@ -154,6 +154,12 @@ def check_chunk(chunk):
     return True
 
 
+def request_integer(label, default_value):
+    translator = get_translator(QtGui.QApplication.instance())
+    translated_label = translator.translate('dlg', label)
+    return ps.app.getInt(label=translated_label, value=default_value)
+
+
 def get_chunk_bounds(chunk):
     min_latitude = min(c.reference.location[1] for c in chunk.cameras if c.reference.location is not None)
     max_latitude = max(c.reference.location[1] for c in chunk.cameras if c.reference.location is not None)
@@ -176,7 +182,8 @@ def get_xy_distance(v1, v2):
 
 
 def get_camera_calibration(chunk):
-    cameras_number_for_align = 10
+    request = "Insert number of photos to estimate camera clibration"
+    cameras_number_for_align = request_integer(request, 10)
     for c in chunk.cameras:
         c.enabled = False
         c.transform = None

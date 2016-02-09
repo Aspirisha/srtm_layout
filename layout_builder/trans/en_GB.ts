@@ -82,6 +82,9 @@
         <source>Initialize chunk coordinate system first</source>
         <translation type="unfinished"></translation>
     </message>
-    
+    <message>
+        <source>Insert number of photos to estimate camera clibration</source>
+         <translation type="unfinished"></translation>
+    </message>
 </context>
 </TS>
