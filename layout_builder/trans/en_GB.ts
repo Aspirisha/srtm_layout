@@ -72,19 +72,19 @@
     </message>
     <message>
         <source>Tools/Import/Import SRTM mesh...</source>
-        <translation type="unfinished"></translation>
+        <translation>Tools/Import/Import SRTM mesh...</translation>
     </message>
     <message>
         <source>Empty chunk!</source>
-        <translation type="unfinished"></translation>
+        <translation>Empty chunk!</translation>
     </message>
     <message>
         <source>Initialize chunk coordinate system first</source>
-        <translation type="unfinished"></translation>
+        <translation>Initialize chunk coordinate system first</translation>
     </message>
     <message>
         <source>Insert number of photos to estimate camera clibration</source>
-         <translation type="unfinished"></translation>
+         <translation>Insert number of photos to estimate camera clibration</translation>
     </message>
 </context>
 </TS>
