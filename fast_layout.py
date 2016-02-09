@@ -85,7 +85,7 @@ def write_model_file(f, points, normals, faces):
         f.write("f {0}//{0} {1}//{1} {2}//{2}\n".format(face[1] + 1, face[0] + 1, face[2] + 1))
 
 
-def build_mesh(output_file, min_latitude, max_latitude, min_longitude, max_longitude, lat_step, long_step, need_download=True):
+def build_mesh(output_file, min_latitude, max_latitude, min_longitude, max_longitude, lat_step, long_step):
     hgts_folder = get_hgts_folder()
     downloader_tasks = ['convert']
     downloader = hgt_downloader.HGTDownloader(min_latitude, min_longitude,
@@ -95,12 +95,11 @@ def build_mesh(output_file, min_latitude, max_latitude, min_longitude, max_longi
         return
 
     def get_height(x, y):
-        downloader.elevation_data.get_elevation(x, y, approximate=True)
+        return downloader.elevation_data.get_elevation(x, y, approximate=True)
 
     mesh_points = np.array([[longitude, latitude, get_height(latitude, longitude) ]
         for latitude in util.frange(min_latitude, max_latitude, lat_step)
         for longitude in util.frange(min_longitude, max_longitude, long_step)])
-
     last_ok = 0
     for p in mesh_points:
         if p[2] is None:
@@ -233,15 +232,6 @@ def align_cameras(chunk, min_latitude, min_longitude, max_latitude, max_longitud
         chunk.transform.translation = ps.Vector([0,0,0])
 
     get_camera_calibration(chunk)
-    delta_latitude_scale_to_meters = 40008000 / 360
-
-    init_location = chunk.cameras[0].reference.location
-    latitude = init_location[0]
-    delta_longitude_scale_to_meters = 40075160 * math.cos(math.radians(latitude)) / 360
-
-    delta_meters_scale_to_chunk = 0.1
-    scales = [delta_latitude_scale_to_meters * delta_meters_scale_to_chunk,
-        delta_longitude_scale_to_meters * delta_meters_scale_to_chunk, delta_meters_scale_to_chunk]
 
     positive_dir = chunk.cameras[1].reference.location - chunk.cameras[0].reference.location
     positive_dir.z = 0
