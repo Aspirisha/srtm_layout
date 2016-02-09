@@ -210,6 +210,7 @@ def get_camera_calibration(chunk):
         for cam_dist in different_cameras[:cameras_number_for_align]:
             cam_dist[0].enabled = True
 
+        chunk.matchPhotos(preselection=ps.Preselection.ReferencePreselection)
         chunk.alignCameras()
         for cam_dist in different_cameras[:cameras_number_for_align]:
             cam_dist[0].enabled = False
