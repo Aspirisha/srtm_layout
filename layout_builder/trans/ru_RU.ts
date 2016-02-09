@@ -73,6 +73,13 @@
         <source>Tools/Import/Import SRTM mesh...</source>
         <translation>Инструменты/Импорт/Импорт SRTM модели...</translation>
     </message>
-
+    <message>
+        <source>Empty chunk!</source>
+        <translation>Пустой блок!</translation>
+    </message>
+    <message>
+        <source>Initialize chunk coordinate system first</source>
+        <translation>Нет координатной привязки камер.</translation>
+    </message>
 </context>
 </TS>

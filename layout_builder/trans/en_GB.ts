@@ -74,5 +74,14 @@
         <source>Tools/Import/Import SRTM mesh...</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Empty chunk!</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Initialize chunk coordinate system first</source>
+        <translation type="unfinished"></translation>
+    </message>
+    
 </context>
 </TS>

@@ -129,15 +129,16 @@ def build_mesh(output_file, min_latitude, max_latitude, min_longitude, max_longi
     print("Mesh imported")
 
 
-
 def wgs_to_chunk(chunk, point):
     return chunk.transform.matrix.inv().mulp(chunk.crs.unproject(point))
 
 
 def show_message(msg):
+    translator = get_translator(QtGui.QApplication.instance())
+    translated_msg = translator.translate('dlg', msg)
     msgBox = QtGui.QMessageBox()
     print(msg)
-    msgBox.setText(msg)
+    msgBox.setText(translated_msg)
     msgBox.exec()
 
 
@@ -168,12 +169,62 @@ def get_chunk_bounds(chunk):
     return min_latitude, min_longitude, max_latitude, max_longitude
 
 
+def get_xy_distance(v1, v2):
+    dv = v1 - v2
+    dv.z = 0
+    return dv.norm()
+
+
+def get_camera_calibration(chunk):
+    cameras_number_for_align = 10
+    for c in chunk.cameras:
+        c.enabled = False
+        c.transform = None
+
+    for sensor in chunk.sensors:
+        central_camera_and_max_dist = (None, None)
+        different_cameras = []
+        for c in chunk.cameras:
+            if c.sensor != sensor:
+                continue
+            different_cameras.append([c, None])
+            max_dist = 0
+            if central_camera_and_max_dist == (None, None):
+                central_camera_and_max_dist = (c, 1e300)
+            for other in chunk.cameras:
+                if other.sensor != sensor:
+                    continue
+                dist = get_xy_distance(other.reference.location, c.reference.location)
+                if dist > max_dist:
+                    max_dist = dist
+
+            if max_dist < central_camera_and_max_dist[1]:
+                central_camera_and_max_dist = (c, max_dist)
+
+        central_camera_location = central_camera_and_max_dist[0].reference.location
+        for cam_dist in different_cameras:
+            cam_dist[1] = get_xy_distance(cam_dist[0].reference.location, central_camera_location)
+
+        different_cameras.sort(key=lambda x: x[1])
+        print('central camera name is {}'.format(central_camera_and_max_dist[0].label))
+        for cam_dist in different_cameras[:cameras_number_for_align]:
+            cam_dist[0].enabled = True
+
+        chunk.alignCameras()
+        for cam_dist in different_cameras[:cameras_number_for_align]:
+            cam_dist[0].enabled = False
+            cam_dist[0].transform = None
+    for c in chunk.cameras:
+        c.enabled = True
+
+
 def align_cameras(chunk, min_latitude, min_longitude, max_latitude, max_longitude):
     if chunk.transform.scale is None:
         chunk.transform.scale = 1
         chunk.transform.rotation = ps.Matrix([[1,0,0], [0,1,0], [0,0,1]])
         chunk.transform.translation = ps.Vector([0,0,0])
 
+    get_camera_calibration(chunk)
     delta_latitude_scale_to_meters = 40008000 / 360
 
     init_location = chunk.cameras[0].reference.location
@@ -187,16 +238,13 @@ def align_cameras(chunk, min_latitude, min_longitude, max_latitude, max_longitud
     positive_dir = chunk.cameras[1].reference.location - chunk.cameras[0].reference.location
     positive_dir.z = 0
     positive_dir.normalize()
-    prev_location = chunk.cameras[0].reference.location
     i, j, k = get_chunk_vectors(min_latitude, min_longitude) # i || North
-
 
     for c in chunk.cameras:
         location = c.reference.location
         chunk_coordinates = wgs_to_chunk(chunk, location)
         fi = math.radians(c.reference.rotation.x + 90)
 
-        print(fi)
         ii, jj = i * math.cos(fi) + j * math.sin(fi), j * math.cos(fi) - i * math.sin(fi)
         c.transform = ps.Matrix([[ii.x, jj.x, k.x, chunk_coordinates[0]],
                                  [ii.y, jj.y, k.y, chunk_coordinates[1]],
@@ -304,5 +352,5 @@ ps.app.addMenuItem(translator.translate(
         'dlg', "Tools/Import/Import SRTM DEM..."), run_import)
 ps.app.addMenuItem(translator.translate(
     'dlg', "Workflow/Apply Vertical Camera Alignment..."), run_camera_alignment)
-'''ps.app.addMenuItem(translator.translate(
-        'dlg', "Tools/Import/Import SRTM mesh..."), import_srtm_mesh)'''
+ps.app.addMenuItem(translator.translate(
+        'dlg', "Tools/Import/Import SRTM mesh..."), import_srtm_mesh)
