@@ -169,13 +169,28 @@ def request_integer(label, default_value):
     return ps.app.getInt(label=translated_label, value=default_value)
 
 
+def get_photos_delta(chunk):
+    mid_idx = int(len(chunk.cameras) / 2)
+    if mid_idx == 0:
+        return ps.Vector([0,0,0])
+    c1 = chunk.cameras[:mid_idx][-1]
+    c2 = chunk.cameras[:mid_idx][-2]
+    offset = c1.reference.location - c2.reference.location
+    for i in range(len(offset)):
+        offset[i] = math.fabs(offset[i])
+    return offset
+
+
 def get_chunk_bounds(chunk):
     min_latitude = min(c.reference.location[1] for c in chunk.cameras if c.reference.location is not None)
     max_latitude = max(c.reference.location[1] for c in chunk.cameras if c.reference.location is not None)
-    min_longitude =  min(c.reference.location[0] for c in chunk.cameras if c.reference.location is not None)
-    max_longitude =  max(c.reference.location[0] for c in chunk.cameras if c.reference.location is not None)
-    delta_latitude = max_latitude - min_latitude
-    delta_longitude = max_longitude - min_longitude
+    min_longitude = min(c.reference.location[0] for c in chunk.cameras if c.reference.location is not None)
+    max_longitude = max(c.reference.location[0] for c in chunk.cameras if c.reference.location is not None)
+    offset = get_photos_delta(chunk)
+    offset_factor = 2
+    delta_latitude = offset_factor * offset.y
+    delta_longitude = offset_factor * offset.x
+
     min_longitude -= delta_longitude
     max_longitude += delta_longitude
     min_latitude -= delta_latitude
