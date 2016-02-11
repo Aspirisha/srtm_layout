@@ -14,6 +14,16 @@ support_directory = str(support_directory.encode(sys.getfilesystemencoding()), '
 gdal.UseExceptions()
 
 
+def time_measure(func):
+    def wrapper(*args, **kwargs):
+        t1 = time.time()
+        res = func(*args, **kwargs)
+        t2 = time.time()
+        print("Finished processing in {} sec.".format(t2 - t1))
+        return res
+    return wrapper
+
+
 def test():
     handler = util.SpecificFolderFileHandler(os.path.join(get_path_in_chunk(), '.srtm'))
     elevation_data = srtm.get_data(file_handler=handler)
@@ -241,12 +251,13 @@ def estimate_wind_angle(chunk, min_latitude, min_longitude, same_yaw_bound=40):
             if first_class_yaw is None:
                 first_class_yaw = c.reference.rotation.x
 
-            fi_no_wind = math.radians(c.reference.rotation.x + 90)
+            fi_no_wind = c.reference.rotation.x + 90
             best_delta_fi = 0
             min_norm = 1e300
             for delta_fi in util.frange(-30, 30, 0.1):
                 fi = fi_no_wind + delta_fi
-                ii_w, jj_w = i * math.cos(fi) + j * math.sin(fi), j * math.cos(fi) - i * math.sin(fi)
+                fi_rad = math.radians(fi)
+                ii_w, jj_w = i * math.cos(fi_rad) + j * math.sin(fi_rad), j * math.cos(fi_rad) - i * math.sin(fi_rad)
                 norm = (c.transform.col(0) - ii_w) * (c.transform.col(0) - ii_w) + \
                        (c.transform.col(1) - jj_w) * (c.transform.col(1) - jj_w)
                 if norm < min_norm:
@@ -254,6 +265,7 @@ def estimate_wind_angle(chunk, min_latitude, min_longitude, same_yaw_bound=40):
                     best_delta_fi = delta_fi
             idx = 0 if math.fabs(first_class_yaw - c.reference.rotation.x) < same_yaw_bound else 1
             yaws_deltas[idx] += best_delta_fi
+            #print('{} : {}'.format(c.label, best_delta_fi))
             class_sizes[idx] += 1
 
     for i in range(2):
@@ -262,6 +274,7 @@ def estimate_wind_angle(chunk, min_latitude, min_longitude, same_yaw_bound=40):
     return yaws_deltas, first_class_yaw
 
 
+@time_measure
 def align_cameras(chunk, min_latitude, min_longitude):
     if chunk.transform.scale is None:
         chunk.transform.scale = 1
@@ -271,7 +284,6 @@ def align_cameras(chunk, min_latitude, min_longitude):
     get_camera_calibration(chunk)
     same_yaw_bound = 40 # within this bound all yaws are considered to be for same direction flights
     yaws_deltas, first_class_yaw = estimate_wind_angle(chunk, min_latitude, min_longitude, same_yaw_bound)
-    print(yaws_deltas)
 
     positive_dir = chunk.cameras[1].reference.location - chunk.cameras[0].reference.location
     positive_dir.z = 0
