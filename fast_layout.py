@@ -205,25 +205,26 @@ def get_xy_distance(v1, v2):
     return dv.norm()
 
 
-def get_camera_calibration(chunk):
+def get_camera_calibration(chunk, min_latitude, min_longitude, same_yaw_bound):
     request = "Insert number of photos to estimate camera calibration"
     cameras_number_for_align = request_integer(request, 10)
     for c in chunk.cameras:
         c.enabled = False
         c.transform = None
 
-    for sensor in chunk.sensors:
+    yaws_deltas_per_group, first_class_yaw_per_group = [], []
+    for group in chunk.camera_groups:
         central_camera_and_max_dist = (None, None)
         different_cameras = []
         for c in chunk.cameras:
-            if c.sensor != sensor:
+            if c.group != group:
                 continue
             different_cameras.append([c, None])
             max_dist = 0
             if central_camera_and_max_dist == (None, None):
                 central_camera_and_max_dist = (c, 1e300)
             for other in chunk.cameras:
-                if other.sensor != sensor:
+                if other.group != group:
                     continue
                 dist = get_xy_distance(other.reference.location, c.reference.location)
                 if dist > max_dist:
@@ -243,11 +244,16 @@ def get_camera_calibration(chunk):
 
         chunk.matchPhotos(preselection=ps.Preselection.ReferencePreselection)
         chunk.alignCameras()
+        yaws_deltas, first_class_yaw = estimate_wind_angle(chunk, min_latitude, min_longitude, same_yaw_bound)
+        yaws_deltas_per_group.append(yaws_deltas)
+        first_class_yaw_per_group.append(first_class_yaw)
+
         for cam_dist in different_cameras[:cameras_number_for_align]:
             cam_dist[0].enabled = False
-            #cam_dist[0].transform = None
+
     for c in chunk.cameras:
         c.enabled = True
+    return yaws_deltas_per_group, first_class_yaw_per_group
 
 
 def extend_3d_vector(v):
@@ -258,30 +264,31 @@ def estimate_wind_angle(chunk, min_latitude, min_longitude, same_yaw_bound=40):
     i, j, k = get_chunk_vectors(min_latitude, min_longitude) # i || North
     i, j = extend_3d_vector(i), extend_3d_vector(j)
     yaws_deltas = [0, 0]
-    class_sizes = [0, 0]
     first_class_yaw = None
 
+    class_sizes = [0, 0]
     for c in chunk.cameras:
-        if c.transform is not None:
-            if first_class_yaw is None:
-                first_class_yaw = c.reference.rotation.x
+        if not c.enabled or c.transform is None:
+            continue
+        if first_class_yaw is None:
+            first_class_yaw = c.reference.rotation.x
 
-            fi_no_wind = c.reference.rotation.x + 90
-            best_delta_fi = 0
-            min_norm = 1e300
-            for delta_fi in util.frange(-30, 30, 0.1):
-                fi = fi_no_wind + delta_fi
-                fi_rad = math.radians(fi)
-                ii_w, jj_w = i * math.cos(fi_rad) + j * math.sin(fi_rad), j * math.cos(fi_rad) - i * math.sin(fi_rad)
-                norm = (c.transform.col(0) - ii_w) * (c.transform.col(0) - ii_w) + \
-                       (c.transform.col(1) - jj_w) * (c.transform.col(1) - jj_w)
-                if norm < min_norm:
-                    min_norm = norm
-                    best_delta_fi = delta_fi
-            idx = 0 if math.fabs(first_class_yaw - c.reference.rotation.x) < same_yaw_bound else 1
-            yaws_deltas[idx] += best_delta_fi
-            #print('{} : {}'.format(c.label, best_delta_fi))
-            class_sizes[idx] += 1
+        fi_no_wind = c.reference.rotation.x + 90
+        best_delta_fi = 0
+        min_norm = 1e300
+        for delta_fi in util.frange(-30, 30, 0.1):
+            fi = fi_no_wind + delta_fi
+            fi_rad = math.radians(fi)
+            ii_w, jj_w = i * math.cos(fi_rad) + j * math.sin(fi_rad), j * math.cos(fi_rad) - i * math.sin(fi_rad)
+            norm = (c.transform.col(0) - ii_w) * (c.transform.col(0) - ii_w) + \
+                   (c.transform.col(1) - jj_w) * (c.transform.col(1) - jj_w)
+            if norm < min_norm:
+                min_norm = norm
+                best_delta_fi = delta_fi
+        idx = 0 if math.fabs(first_class_yaw - c.reference.rotation.x) < same_yaw_bound else 1
+        yaws_deltas[idx] += best_delta_fi
+        #print('{} : {}'.format(c.label, best_delta_fi))
+        class_sizes[idx] += 1
 
     for i in range(2):
         if class_sizes[i] > 0:
@@ -296,9 +303,15 @@ def align_cameras(chunk, min_latitude, min_longitude):
         chunk.transform.rotation = ps.Matrix([[1,0,0], [0,1,0], [0,0,1]])
         chunk.transform.translation = ps.Vector([0,0,0])
 
-    get_camera_calibration(chunk)
+    for c in chunk.cameras:
+        if c.group is None:
+            show_message("All cameras should belong to some group.")
+            return
+
     same_yaw_bound = 40 # within this bound all yaws are considered to be for same direction flights
-    yaws_deltas, first_class_yaw = estimate_wind_angle(chunk, min_latitude, min_longitude, same_yaw_bound)
+    yaws_deltas, first_class_yaw = get_camera_calibration(chunk, min_latitude, min_longitude, same_yaw_bound=40)
+
+    print(yaws_deltas)
 
     positive_dir = chunk.cameras[1].reference.location - chunk.cameras[0].reference.location
     positive_dir.z = 0
@@ -306,11 +319,13 @@ def align_cameras(chunk, min_latitude, min_longitude):
     i, j, k = get_chunk_vectors(min_latitude, min_longitude) # i || North
 
     for c in chunk.cameras:
+        group_index = chunk.camera_groups.index(c.group)
+
         location = c.reference.location
         chunk_coordinates = wgs_to_chunk(chunk, location)
         fi = c.reference.rotation.x + 90
-        idx = 0 if math.fabs(c.reference.rotation.x - first_class_yaw) < same_yaw_bound else 1
-        fi += yaws_deltas[idx]
+        idx = 0 if math.fabs(c.reference.rotation.x - first_class_yaw[group_index]) < same_yaw_bound else 1
+        fi += yaws_deltas[group_index][idx]
         fi = math.radians(fi)
 
         ii, jj = i * math.cos(fi) + j * math.sin(fi), j * math.cos(fi) - i * math.sin(fi)
