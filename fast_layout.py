@@ -200,6 +200,8 @@ def get_chunk_bounds(chunk):
 
 
 def get_xy_distance(v1, v2):
+    if v1 is None or v2 is None:
+        return 1e300
     dv = v1 - v2
     dv.z = 0
     return dv.norm()
@@ -217,14 +219,14 @@ def get_camera_calibration(chunk, min_latitude, min_longitude, same_yaw_bound):
         central_camera_and_max_dist = (None, None)
         different_cameras = []
         for c in chunk.cameras:
-            if c.group != group:
+            if c.group != group or c.reference.location is None:
                 continue
             different_cameras.append([c, None])
             max_dist = 0
             if central_camera_and_max_dist == (None, None):
                 central_camera_and_max_dist = (c, 1e300)
             for other in chunk.cameras:
-                if other.group != group:
+                if other.group != group or other.reference.location is None:
                     continue
                 dist = get_xy_distance(other.reference.location, c.reference.location)
                 if dist > max_dist:
@@ -242,11 +244,19 @@ def get_camera_calibration(chunk, min_latitude, min_longitude, same_yaw_bound):
         for cam_dist in different_cameras[:cameras_number_for_align]:
             cam_dist[0].enabled = True
 
-        chunk.matchPhotos(preselection=ps.Preselection.ReferencePreselection)
-        chunk.alignCameras()
-        yaws_deltas, first_class_yaw = estimate_wind_angle(chunk, min_latitude, min_longitude, same_yaw_bound)
-        yaws_deltas_per_group.append(yaws_deltas)
-        first_class_yaw_per_group.append(first_class_yaw)
+        match_result = chunk.matchPhotos(preselection=ps.Preselection.ReferencePreselection)
+        success = False
+        if match_result:
+            align_result = chunk.alignCameras()
+            if align_result:
+                yaws_deltas, first_class_yaw = estimate_wind_angle(chunk, min_latitude, min_longitude, same_yaw_bound)
+                yaws_deltas_per_group.append(yaws_deltas)
+                first_class_yaw_per_group.append(first_class_yaw)
+                success = True
+
+        if not success:
+            yaws_deltas_per_group.append([0, 0])
+            first_class_yaw_per_group.append(0)
 
         for cam_dist in different_cameras[:cameras_number_for_align]:
             cam_dist[0].enabled = False
