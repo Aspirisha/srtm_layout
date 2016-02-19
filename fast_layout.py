@@ -8,7 +8,7 @@ from osgeo import gdal
 import time
 from layout_builder import util, hgt_downloader, gdal_merge, ProgressDialog
 from PySide import QtCore, QtGui
-from copy import deepcopy
+import copy
 
 support_directory = os.path.dirname(os.path.realpath(__file__)) + os.sep + u'layout_builder'
 support_directory = str(support_directory.encode(sys.getfilesystemencoding()), 'utf8')
@@ -216,8 +216,8 @@ def get_camera_calibration(chunk, min_latitude, min_longitude, same_yaw_bound):
         c.transform = None
 
     yaws_deltas_per_group, first_class_yaw_per_group = [], []
+    groups = copy.copy(chunk.camera_groups)
 
-    groups = deepcopy(chunk.camera_groups)
     groups.append(None)
     for group in groups:
         central_camera_and_max_dist = (None, None)
@@ -225,6 +225,7 @@ def get_camera_calibration(chunk, min_latitude, min_longitude, same_yaw_bound):
         for c in chunk.cameras:
             if c.group != group or c.reference.location is None:
                 continue
+
             different_cameras.append([c, None])
             max_dist = 0
             if central_camera_and_max_dist == (None, None):
@@ -239,32 +240,37 @@ def get_camera_calibration(chunk, min_latitude, min_longitude, same_yaw_bound):
             if max_dist < central_camera_and_max_dist[1]:
                 central_camera_and_max_dist = (c, max_dist)
 
-        central_camera_location = central_camera_and_max_dist[0].reference.location
-        for cam_dist in different_cameras:
-            cam_dist[1] = get_xy_distance(cam_dist[0].reference.location, central_camera_location)
-
-        different_cameras.sort(key=lambda x: x[1])
-        print('central camera name is {}'.format(central_camera_and_max_dist[0].label))
-        for cam_dist in different_cameras[:cameras_number_for_align]:
-            cam_dist[0].enabled = True
-
-        match_result = chunk.matchPhotos(preselection=ps.Preselection.ReferencePreselection)
         success = False
-        if match_result:
-            align_result = chunk.alignCameras()
-            if align_result:
-                yaws_deltas, first_class_yaw = estimate_wind_angle(chunk, min_latitude, min_longitude, same_yaw_bound)
-                yaws_deltas_per_group.append(yaws_deltas)
-                first_class_yaw_per_group.append(first_class_yaw)
-                success = True
+        if len(different_cameras) > 0:
+            central_camera_location = central_camera_and_max_dist[0].reference.location
+            for cam_dist in different_cameras:
+                cam_dist[1] = get_xy_distance(cam_dist[0].reference.location, central_camera_location)
+
+            different_cameras.sort(key=lambda x: x[1])
+            print('central camera name is {}'.format(central_camera_and_max_dist[0].label))
+            for cam_dist in different_cameras[:cameras_number_for_align]:
+                cam_dist[0].enabled = True
+
+            match_result = chunk.matchPhotos(preselection=ps.Preselection.ReferencePreselection)
+
+            if match_result:
+                align_result = chunk.alignCameras()
+                if align_result:
+                    yaws_deltas, first_class_yaw = estimate_wind_angle(chunk, min_latitude,
+                                                                       min_longitude, same_yaw_bound)
+                    yaws_deltas_per_group.append(yaws_deltas)
+                    first_class_yaw_per_group.append(first_class_yaw)
+                    success = True
 
         if not success:
             yaws_deltas_per_group.append([0, 0])
             first_class_yaw_per_group.append(0)
+            if len(different_cameras) > 0:
+                print('Camera group {} was not aligned. '
+                      'Using predefined calibration and no wind estimation.'.format(group))
 
         for cam_dist in different_cameras[:cameras_number_for_align]:
             cam_dist[0].enabled = False
-
     for c in chunk.cameras:
         c.enabled = True
     return yaws_deltas_per_group, first_class_yaw_per_group
@@ -286,6 +292,7 @@ def estimate_wind_angle(chunk, min_latitude, min_longitude, same_yaw_bound=40):
             continue
         if first_class_yaw is None:
             first_class_yaw = c.reference.rotation.x
+
 
         fi_no_wind = c.reference.rotation.x + 90
         best_delta_fi = 0
@@ -320,29 +327,28 @@ def align_cameras(chunk, min_latitude, min_longitude):
     same_yaw_bound = 40 # within this bound all yaws are considered to be for same direction flights
     yaws_deltas, first_class_yaw = get_camera_calibration(chunk, min_latitude, min_longitude, same_yaw_bound=40)
 
-    print(yaws_deltas)
+    print('Estimated yaw offsets {}'.format(yaws_deltas))
 
-    positive_dir = chunk.cameras[1].reference.location - chunk.cameras[0].reference.location
-    positive_dir.z = 0
-    positive_dir.normalize()
     i, j, k = get_chunk_vectors(min_latitude, min_longitude) # i || North
 
     for c in chunk.cameras:
         group_index = chunk.camera_groups.index(c.group) if c.group is not None else -1
 
         location = c.reference.location
+        if location is None:
+            continue
         chunk_coordinates = wgs_to_chunk(chunk, location)
         fi = c.reference.rotation.x + 90
         idx = 0 if math.fabs(c.reference.rotation.x - first_class_yaw[group_index]) < same_yaw_bound else 1
         fi += yaws_deltas[group_index][idx]
         fi = math.radians(fi)
 
+
         ii, jj = i * math.cos(fi) + j * math.sin(fi), j * math.cos(fi) - i * math.sin(fi)
         c.transform = ps.Matrix([[ii.x, jj.x, k.x, chunk_coordinates[0]],
                                  [ii.y, jj.y, k.y, chunk_coordinates[1]],
                                  [ii.z, jj.z, k.z, chunk_coordinates[2]],
                                  [0, 0, 0, 1]])
-
 
 def revert_changes(chunk):
     for c in chunk.cameras:
@@ -412,8 +418,11 @@ class DemImporter(QtCore.QObject):
 
 
 def run_import():
-    importer = DemImporter()
-    importer.import_dem()
+    try:
+        importer = DemImporter()
+        importer.import_dem()
+    except Exception as e:
+        print(e)
 
 
 def run_camera_alignment():
@@ -424,7 +433,10 @@ def run_camera_alignment():
         return
 
     min_latitude, min_longitude, max_latitude, max_longitude = get_chunk_bounds(chunk)
-    align_cameras(chunk, min_latitude, min_longitude)
+    try:
+        align_cameras(chunk, min_latitude, min_longitude)
+    except Exception as e:
+        print(e)
 
 
 def import_srtm_mesh():
