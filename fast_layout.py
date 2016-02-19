@@ -8,6 +8,7 @@ from osgeo import gdal
 import time
 from layout_builder import util, hgt_downloader, gdal_merge, ProgressDialog
 from PySide import QtCore, QtGui
+from copy import deepcopy
 
 support_directory = os.path.dirname(os.path.realpath(__file__)) + os.sep + u'layout_builder'
 support_directory = str(support_directory.encode(sys.getfilesystemencoding()), 'utf8')
@@ -215,7 +216,10 @@ def get_camera_calibration(chunk, min_latitude, min_longitude, same_yaw_bound):
         c.transform = None
 
     yaws_deltas_per_group, first_class_yaw_per_group = [], []
-    for group in chunk.camera_groups:
+
+    groups = deepcopy(chunk.camera_groups)
+    groups.append(None)
+    for group in groups:
         central_camera_and_max_dist = (None, None)
         different_cameras = []
         for c in chunk.cameras:
@@ -313,11 +317,6 @@ def align_cameras(chunk, min_latitude, min_longitude):
         chunk.transform.rotation = ps.Matrix([[1,0,0], [0,1,0], [0,0,1]])
         chunk.transform.translation = ps.Vector([0,0,0])
 
-    for c in chunk.cameras:
-        if c.group is None:
-            show_message("All cameras should belong to some group.")
-            return
-
     same_yaw_bound = 40 # within this bound all yaws are considered to be for same direction flights
     yaws_deltas, first_class_yaw = get_camera_calibration(chunk, min_latitude, min_longitude, same_yaw_bound=40)
 
@@ -329,7 +328,7 @@ def align_cameras(chunk, min_latitude, min_longitude):
     i, j, k = get_chunk_vectors(min_latitude, min_longitude) # i || North
 
     for c in chunk.cameras:
-        group_index = chunk.camera_groups.index(c.group)
+        group_index = chunk.camera_groups.index(c.group) if c.group is not None else -1
 
         location = c.reference.location
         chunk_coordinates = wgs_to_chunk(chunk, location)
