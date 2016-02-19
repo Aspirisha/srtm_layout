@@ -8,6 +8,7 @@ from osgeo import gdal
 import time
 from layout_builder import util, hgt_downloader, gdal_merge, ProgressDialog
 from PySide import QtCore, QtGui
+from copy import deepcopy
 
 support_directory = os.path.dirname(os.path.realpath(__file__)) + os.sep + u'layout_builder'
 support_directory = str(support_directory.encode(sys.getfilesystemencoding()), 'utf8')
@@ -215,7 +216,10 @@ def get_camera_calibration(chunk, min_latitude, min_longitude, same_yaw_bound):
         c.transform = None
 
     yaws_deltas_per_group, first_class_yaw_per_group = [], []
-    for group in chunk.camera_groups:
+
+    groups = deepcopy(chunk.camera_groups)
+    groups.append(None)
+    for group in groups:
         central_camera_and_max_dist = (None, None)
         different_cameras = []
         for c in chunk.cameras:
@@ -308,41 +312,33 @@ def estimate_wind_angle(chunk, min_latitude, min_longitude, same_yaw_bound=40):
 
 @time_measure
 def align_cameras(chunk, min_latitude, min_longitude):
-    try:
-        if chunk.transform.scale is None:
-            chunk.transform.scale = 1
-            chunk.transform.rotation = ps.Matrix([[1,0,0], [0,1,0], [0,0,1]])
-            chunk.transform.translation = ps.Vector([0,0,0])
+    if chunk.transform.scale is None:
+        chunk.transform.scale = 1
+        chunk.transform.rotation = ps.Matrix([[1,0,0], [0,1,0], [0,0,1]])
+        chunk.transform.translation = ps.Vector([0,0,0])
 
-        for c in chunk.cameras:
-            if c.group is None:
-                show_message("All cameras should belong to some group.")
-                return
+    same_yaw_bound = 40 # within this bound all yaws are considered to be for same direction flights
+    yaws_deltas, first_class_yaw = get_camera_calibration(chunk, min_latitude, min_longitude, same_yaw_bound=40)
 
-        same_yaw_bound = 40 # within this bound all yaws are considered to be for same direction flights
-        yaws_deltas, first_class_yaw = get_camera_calibration(chunk, min_latitude, min_longitude, same_yaw_bound=40)
+    print(yaws_deltas)
 
-        print(yaws_deltas)
+    i, j, k = get_chunk_vectors(min_latitude, min_longitude) # i || North
 
-        i, j, k = get_chunk_vectors(min_latitude, min_longitude) # i || North
+    for c in chunk.cameras:
+        group_index = chunk.camera_groups.index(c.group) if c.group is not None else -1
 
-        for c in chunk.cameras:
-            group_index = chunk.camera_groups.index(c.group)
+        location = c.reference.location
+        chunk_coordinates = wgs_to_chunk(chunk, location)
+        fi = c.reference.rotation.x + 90
+        idx = 0 if math.fabs(c.reference.rotation.x - first_class_yaw[group_index]) < same_yaw_bound else 1
+        fi += yaws_deltas[group_index][idx]
+        fi = math.radians(fi)
 
-            location = c.reference.location
-            chunk_coordinates = wgs_to_chunk(chunk, location)
-            fi = c.reference.rotation.x + 90
-            idx = 0 if math.fabs(c.reference.rotation.x - first_class_yaw[group_index]) < same_yaw_bound else 1
-            fi += yaws_deltas[group_index][idx]
-            fi = math.radians(fi)
-
-            ii, jj = i * math.cos(fi) + j * math.sin(fi), j * math.cos(fi) - i * math.sin(fi)
-            c.transform = ps.Matrix([[ii.x, jj.x, k.x, chunk_coordinates[0]],
-                                     [ii.y, jj.y, k.y, chunk_coordinates[1]],
-                                     [ii.z, jj.z, k.z, chunk_coordinates[2]],
-                                     [0, 0, 0, 1]])
-    except Exception as e:
-        print(e)
+        ii, jj = i * math.cos(fi) + j * math.sin(fi), j * math.cos(fi) - i * math.sin(fi)
+        c.transform = ps.Matrix([[ii.x, jj.x, k.x, chunk_coordinates[0]],
+                                 [ii.y, jj.y, k.y, chunk_coordinates[1]],
+                                 [ii.z, jj.z, k.z, chunk_coordinates[2]],
+                                 [0, 0, 0, 1]])
 
 
 def revert_changes(chunk):
