@@ -86,5 +86,13 @@
         <source>Insert number of photos to estimate camera calibration</source>
          <translation>Insert number of photos to estimate camera clibration</translation>
     </message>
+    <message>
+        <source>Pause</source>
+        <translation>Pause</translation>
+    </message>
+    <message>
+        <source>Continue</source>
+        <translation>Continue</translation>
+    </message>
 </context>
 </TS>

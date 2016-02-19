@@ -85,6 +85,13 @@
         <source>Insert number of photos to estimate camera calibration</source>
         <translation>Выберите число фотографий для оценки калибровки камеры.</translation>
     </message>
-    
+    <message>
+        <source>Pause</source>
+        <translation>Пауза</translation>
+    </message>
+    <message>
+        <source>Continue</source>
+        <translation>Продолжить</translation>
+    </message>
 </context>
 </TS>
