@@ -11,11 +11,16 @@ class ProgressDialog(QtGui.QDialog):
         self.ui = progress_ui.Ui_Dialog()
         self.ui.setupUi(self)
         self.ui.retranslateUi(self)
+        self.paused_text = ['Paused', 'Continue']
+        self.current_pause_button_text_index = 0
 
     def on_cancel(self):
         self.canceled.emit()
 
     def on_pause(self):
+        self.current_pause_button_text_index = 1 - self.current_pause_button_text_index
+        self.ui.pause.setText(
+            QtGui.QApplication.translate("dlg", self.paused_text[self.current_pause_button_text_index]))
         self.paused.emit()
 
     def set_current_label_text(self, text):

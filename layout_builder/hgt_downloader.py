@@ -47,7 +47,14 @@ class HGTDownloader(QtCore.QThread):
         self.stopped = False
 
     def check_pause(self):
-        while self.paused:
+        res = True
+        while res:
+            try:
+                self.mutex.lock()
+                res = self.paused
+            finally:
+                self.mutex.unlock()
+
             QtCore.QThread.msleep(100)
 
 

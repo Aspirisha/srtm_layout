@@ -293,7 +293,6 @@ def estimate_wind_angle(chunk, min_latitude, min_longitude, same_yaw_bound=40):
         if first_class_yaw is None:
             first_class_yaw = c.reference.rotation.x
 
-
         fi_no_wind = c.reference.rotation.x + 90
         best_delta_fi = 0
         min_norm = 1e300
@@ -342,7 +341,6 @@ def align_cameras(chunk, min_latitude, min_longitude):
         idx = 0 if math.fabs(c.reference.rotation.x - first_class_yaw[group_index]) < same_yaw_bound else 1
         fi += yaws_deltas[group_index][idx]
         fi = math.radians(fi)
-
 
         ii, jj = i * math.cos(fi) + j * math.sin(fi), j * math.cos(fi) - i * math.sin(fi)
         c.transform = ps.Matrix([[ii.x, jj.x, k.x, chunk_coordinates[0]],

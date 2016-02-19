@@ -5,6 +5,7 @@ import math
 import struct
 import gdal
 import ctypes
+import site
 
 def frange(x, y, jump):
     while x < y:
@@ -35,11 +36,13 @@ class SpecificFolderFileHandler(srtm.FileHandler):
 
 # @return full name of result hgt file
 def apply_egm_offset(hgt_file):
-    egm_tif_file = os.path.join(os.getcwd(), 'geoids', 'egm96-15.tif')
+    offset_dir = site.getsitepackages()[0].split('python', 1)[0]
+
+    egm_tif_file = os.path.join(offset_dir, 'geoids', 'egm96-15.tif')
     try:
         tif = gdal.Open(egm_tif_file)
     except:
-        print('Couldn\'t find "egm96-15.tif"')
+        print('Couldn\'t find "egm96-15.tif" in {}'.format(egm_tif_file))
         return None
 
     band1 = tif.GetRasterBand(1).ReadAsArray()
