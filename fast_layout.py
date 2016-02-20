@@ -25,14 +25,6 @@ def time_measure(func):
     return wrapper
 
 
-def test():
-    handler = util.SpecificFolderFileHandler(os.path.join(get_path_in_chunk(), '.srtm'))
-    elevation_data = srtm.get_data(file_handler=handler)
-    h = elevation_data.get_elevation(57.1, 95.1, approximate=True)
-    print(h)
-    return elevation_data
-
-
 def get_translator(qtapp):
     settings = QtCore.QSettings()
     lang = settings.value('main/language')
@@ -341,11 +333,18 @@ def align_cameras(chunk, min_latitude, min_longitude):
         idx = 0 if math.fabs(c.reference.rotation.x - first_class_yaw[group_index]) < same_yaw_bound else 1
         fi += yaws_deltas[group_index][idx]
         fi = math.radians(fi)
+        roll = math.radians(c.reference.rotation.z)
+        pitch = math.radians(c.reference.rotation.y)
 
-        ii, jj = i * math.cos(fi) + j * math.sin(fi), j * math.cos(fi) - i * math.sin(fi)
-        c.transform = ps.Matrix([[ii.x, jj.x, k.x, chunk_coordinates[0]],
-                                 [ii.y, jj.y, k.y, chunk_coordinates[1]],
-                                 [ii.z, jj.z, k.z, chunk_coordinates[2]],
+        roll_mat = ps.Matrix([[1, 0, 0], [0, math.cos(roll), -math.sin(roll)], [0, math.sin(roll), math.cos(roll)]])
+        pitch_mat = ps.Matrix([[math.cos(pitch), 0, math.sin(pitch)], [0, 1, 0], [-math.sin(pitch), 0, math.cos(pitch)]])
+        yaw_mat = ps.Matrix([[math.cos(fi), -math.sin(fi), 0], [math.sin(fi), math.cos(fi), 0], [0, 0, 1]])
+        r = yaw_mat * pitch_mat * roll_mat
+
+        ii, jj, kk = r * i, r * j, r * k
+        c.transform = ps.Matrix([[ii.x, jj.x, kk.x, chunk_coordinates[0]],
+                                 [ii.y, jj.y, kk.y, chunk_coordinates[1]],
+                                 [ii.z, jj.z, kk.z, chunk_coordinates[2]],
                                  [0, 0, 0, 1]])
 
 def revert_changes(chunk):
