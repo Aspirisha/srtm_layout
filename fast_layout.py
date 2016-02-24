@@ -233,7 +233,7 @@ def get_camera_calibration(chunk, min_latitude, min_longitude, same_yaw_bound):
                 central_camera_and_max_dist = (c, max_dist)
 
         success = False
-        if len(different_cameras) > 0:
+        if len(different_cameras) > 0 and cameras_number_for_align > 5:
             central_camera_location = central_camera_and_max_dist[0].reference.location
             for cam_dist in different_cameras:
                 cam_dist[1] = get_xy_distance(cam_dist[0].reference.location, central_camera_location)
@@ -339,9 +339,13 @@ def align_cameras(chunk, min_latitude, min_longitude):
         roll_mat = ps.Matrix([[1, 0, 0], [0, math.cos(roll), -math.sin(roll)], [0, math.sin(roll), math.cos(roll)]])
         pitch_mat = ps.Matrix([[math.cos(pitch), 0, math.sin(pitch)], [0, 1, 0], [-math.sin(pitch), 0, math.cos(pitch)]])
         yaw_mat = ps.Matrix([[math.cos(fi), -math.sin(fi), 0], [math.sin(fi), math.cos(fi), 0], [0, 0, 1]])
-        r = yaw_mat * pitch_mat * roll_mat
+        r = roll_mat * pitch_mat * yaw_mat
 
-        ii, jj, kk = r * i, r * j, r * k
+        #ii, jj, kk = r * i, r * j, k
+        ii = r[0, 0] * i + r[1, 0] * j + r[2, 0] * k
+        jj = r[0, 1] * i + r[1, 1] * j + r[2, 1] * k
+        kk = r[0, 2] * i + r[1, 2] * j + r[2, 2] * k
+        #ii, jj, kk = i * math.cos(fi) + j * math.sin(fi), j * math.cos(fi) - i * math.sin(fi), k
         c.transform = ps.Matrix([[ii.x, jj.x, kk.x, chunk_coordinates[0]],
                                  [ii.y, jj.y, kk.y, chunk_coordinates[1]],
                                  [ii.z, jj.z, kk.z, chunk_coordinates[2]],
