@@ -339,7 +339,9 @@ def align_cameras(chunk, min_latitude, min_longitude):
         roll_mat = ps.Matrix([[1, 0, 0], [0, math.cos(roll), -math.sin(roll)], [0, math.sin(roll), math.cos(roll)]])
         pitch_mat = ps.Matrix([[math.cos(pitch), 0, math.sin(pitch)], [0, 1, 0], [-math.sin(pitch), 0, math.cos(pitch)]])
         yaw_mat = ps.Matrix([[math.cos(fi), -math.sin(fi), 0], [math.sin(fi), math.cos(fi), 0], [0, 0, 1]])
+
         r = roll_mat * pitch_mat * yaw_mat
+        #r =  yaw_mat * pitch_mat * roll_mat
 
         #ii, jj, kk = r * i, r * j, k
         ii = r[0, 0] * i + r[1, 0] * j + r[2, 0] * k
