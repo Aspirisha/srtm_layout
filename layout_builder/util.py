@@ -90,7 +90,6 @@ def apply_egm_offset(hgt_file):
 
                 if val != -32768:
                     val += offset_sample
-                print('offset is {}'.format(offset_sample))
                 struct.pack_into(">h", data, offset, int(val))
                 offset += 2
 
