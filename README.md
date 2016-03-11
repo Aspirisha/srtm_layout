@@ -9,8 +9,8 @@ Features:
 ##Installation##
 
 To run the plugin, you need
-* GDAL installed in your system
+* GDAL installed in your system and available via command prompt
 * extract files from this repo into 
  * under linux: ~/.local/share/data/Agisoft/PhotoScan Pro/scripts
  * under windows: /c/Users/Andy/AppData/Local/Agisoft/PhotoScan Pro/scripts
- 
+* extract files from storage-nas-1/Departments/Office/Software_development/FastLayout/site-packages int %PHOTOSCAN_HOME%/python/Lib/site-packages  
