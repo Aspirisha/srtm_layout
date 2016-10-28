@@ -1,4 +1,4 @@
-import srtm
+import fast_layout.srtm as srtm
 import os
 import re
 import math

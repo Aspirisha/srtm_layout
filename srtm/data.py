@@ -28,11 +28,10 @@ try:
     import cStringIO as mod_cstringio
 except:
     from io import StringIO as mod_cstringio
+#
+# from fast_layout.srtm import utils as mod_utilsfro
 
-from . import utils as mod_utils
-from . import retriever as mod_retriever
-
-import requests as mod_requests
+import fast_layout.requests as mod_requests
 
 class GeoElevationData:
     """

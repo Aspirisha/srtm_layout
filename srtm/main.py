@@ -20,9 +20,8 @@ import json     as mod_json
 import os       as mod_os
 import os.path  as mod_path
 
-from . import data      as mod_data
-from . import utils     as mod_utils
-from . import retriever as mod_retriever
+from fast_layout.srtm import data      as mod_data
+from fast_layout.srtm import retriever as mod_retriever
 
 SRTM1_URL = 'http://dds.cr.usgs.gov/srtm/version2_1/SRTM1/'
 SRTM3_URL = 'http://dds.cr.usgs.gov/srtm/version2_1/SRTM3/'

@@ -1,12 +1,11 @@
 import PhotoScan as ps
 import math
-import srtm
 import os, sys
-from layout_builder.DelaunayVoronoi import computeDelaunayTriangulation
+from fast_layout.layout_builder.DelaunayVoronoi import computeDelaunayTriangulation
 import numpy as np
 from osgeo import gdal
 import time
-from layout_builder import util, hgt_downloader, gdal_merge, ProgressDialog
+from fast_layout.layout_builder import util, hgt_downloader, gdal_merge, ProgressDialog
 from PySide import QtCore, QtGui
 import copy
 
@@ -453,11 +452,11 @@ def import_srtm_mesh():
     mesh_file = os.path.join(get_path_in_chunk(), '.srtm', 'model.obj')
     build_mesh(mesh_file, min_latitude, max_latitude, min_longitude, max_longitude, 0.001, 0.001)
 
-
-translator = get_translator(QtGui.QApplication.instance())
-ps.app.addMenuItem(translator.translate(
-        'dlg', "Tools/Import/Import SRTM DEM..."), run_import)
-ps.app.addMenuItem(translator.translate(
-    'dlg', "Workflow/Apply Vertical Camera Alignment..."), run_camera_alignment)
-ps.app.addMenuItem(translator.translate(
-        'dlg', "Tools/Import/Import SRTM mesh..."), import_srtm_mesh)
+def injectFastLayout():
+    translator = get_translator(QtGui.QApplication.instance())
+    ps.app.addMenuItem(translator.translate(
+            'dlg', "Tools/Import/Import SRTM DEM..."), run_import)
+    ps.app.addMenuItem(translator.translate(
+        'dlg', "Workflow/Apply Vertical Camera Alignment..."), run_camera_alignment)
+    ps.app.addMenuItem(translator.translate(
+            'dlg', "Tools/Import/Import SRTM mesh..."), import_srtm_mesh)
