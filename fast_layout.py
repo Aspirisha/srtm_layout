@@ -160,7 +160,7 @@ def request_integer(label, default_value):
     translated_label = translator.translate('dlg', label)
     return ps.app.getInt(label=translated_label, value=default_value)
 
-
+# returns distance estimation between two cameras in chunk 
 def get_photos_delta(chunk):
     mid_idx = int(len(chunk.cameras) / 2)
     if mid_idx == 0:
@@ -190,7 +190,7 @@ def get_chunk_bounds(chunk):
 
     return min_latitude, min_longitude, max_latitude, max_longitude
 
-
+# returns horizontal distance between two vectors
 def get_xy_distance(v1, v2):
     if v1 is None or v2 is None:
         return 1e300
@@ -199,9 +199,18 @@ def get_xy_distance(v1, v2):
     return dv.norm()
 
 
+# For every camera group this function aligns few central cameras, which
+# makes cameras in each group calibrated (since the sensor is one for all
+# cameras in one group)
+# After aligning central cameras in given group, we estimate yaw crrection due to 
+# wind for this camera group
 def get_camera_calibration(chunk, min_latitude, min_longitude, same_yaw_bound):
     request = "Insert number of photos to estimate camera calibration"
     cameras_number_for_align = request_integer(request, 10)
+    print(cameras_number_for_aligns)
+
+    # disable all cameras so that they don't participate 
+    # in future possible alignement. Also drop their transform
     for c in chunk.cameras:
         c.enabled = False
         c.transform = None
@@ -211,8 +220,13 @@ def get_camera_calibration(chunk, min_latitude, min_longitude, same_yaw_bound):
 
     groups.append(None)
     for group in groups:
+
         central_camera_and_max_dist = (None, None)
+        
+        # this is list of pairs(camera, maximum distance from this camera to other cameras)
+        # so, central camera is defined as argmin(different_cameras[j][1])
         different_cameras = []
+
         for c in chunk.cameras:
             if c.group != group or c.reference.location is None:
                 continue
@@ -228,6 +242,8 @@ def get_camera_calibration(chunk, min_latitude, min_longitude, same_yaw_bound):
                 if dist > max_dist:
                     max_dist = dist
 
+            # if this camera is closer to all cameras then the previous possible center,
+            # then choose this camera as the center one
             if max_dist < central_camera_and_max_dist[1]:
                 central_camera_and_max_dist = (c, max_dist)
 
@@ -237,11 +253,15 @@ def get_camera_calibration(chunk, min_latitude, min_longitude, same_yaw_bound):
             for cam_dist in different_cameras:
                 cam_dist[1] = get_xy_distance(cam_dist[0].reference.location, central_camera_location)
 
+            # sort cameras with repsect to their distance to the central camera
             different_cameras.sort(key=lambda x: x[1])
             print('central camera name is {}'.format(central_camera_and_max_dist[0].label))
+            
+            # enable cameras that will be aligned fairly, using photoscan
             for cam_dist in different_cameras[:cameras_number_for_align]:
                 cam_dist[0].enabled = True
 
+            # try aligning cameras |cameras_number_for_align| cameras 
             match_result = chunk.matchPhotos(preselection=ps.Preselection.ReferencePreselection)
 
             if match_result:
@@ -274,7 +294,10 @@ def extend_3d_vector(v):
 def estimate_wind_angle(chunk, min_latitude, min_longitude, same_yaw_bound=40):
     i, j, k = get_chunk_vectors(min_latitude, min_longitude) # i || North
     i, j = extend_3d_vector(i), extend_3d_vector(j)
-    yaws_deltas = [0, 0]
+    
+    # since copter usually flies lineary back and forth, 
+    # we need to estimate two wind angles: one angle for each direction
+    yaws_deltas = [0, 0] # initial estimation is no wind
     first_class_yaw = None
 
     class_sizes = [0, 0]
@@ -287,6 +310,8 @@ def estimate_wind_angle(chunk, min_latitude, min_longitude, same_yaw_bound=40):
         fi_no_wind = c.reference.rotation.x + 90
         best_delta_fi = 0
         min_norm = 1e300
+
+        # find best matching wind angle for given camera c
         for delta_fi in util.frange(-30, 30, 0.1):
             fi = fi_no_wind + delta_fi
             fi_rad = math.radians(fi)
@@ -296,6 +321,8 @@ def estimate_wind_angle(chunk, min_latitude, min_longitude, same_yaw_bound=40):
             if norm < min_norm:
                 min_norm = norm
                 best_delta_fi = delta_fi
+
+        # is this estimation for flying forward or backward?
         idx = 0 if math.fabs(first_class_yaw - c.reference.rotation.x) < same_yaw_bound else 1
         yaws_deltas[idx] += best_delta_fi
         #print('{} : {}'.format(c.label, best_delta_fi))
