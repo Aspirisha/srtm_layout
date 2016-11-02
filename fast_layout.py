@@ -199,91 +199,20 @@ def get_xy_distance(v1, v2):
     return dv.norm()
 
 
-# For every camera group this function aligns few central cameras, which
-# makes cameras in each group calibrated (since the sensor is one for all
-# cameras in one group)
-# After aligning central cameras in given group, we estimate yaw crrection due to 
-# wind for this camera group
+# Estimates yaw crrection due to wind for this camera group
 def get_camera_calibration(chunk, min_latitude, min_longitude, same_yaw_bound):
     request = "Insert number of photos to estimate camera calibration"
-    cameras_number_for_align = request_integer(request, 10)
-    print(cameras_number_for_aligns)
-
-    # disable all cameras so that they don't participate 
-    # in future possible alignement. Also drop their transform
-    for c in chunk.cameras:
-        c.enabled = False
-        c.transform = None
 
     yaws_deltas_per_group, first_class_yaw_per_group = [], []
     groups = copy.copy(chunk.camera_groups)
 
     groups.append(None)
     for group in groups:
+        yaws_deltas, first_class_yaw = estimate_wind_angle(chunk, group, min_latitude,
+                                                           min_longitude, same_yaw_bound)
+        yaws_deltas_per_group.append(yaws_deltas)
+        first_class_yaw_per_group.append(first_class_yaw)
 
-        central_camera_and_max_dist = (None, None)
-        
-        # this is list of pairs(camera, maximum distance from this camera to other cameras)
-        # so, central camera is defined as argmin(different_cameras[j][1])
-        different_cameras = []
-
-        for c in chunk.cameras:
-            if c.group != group or c.reference.location is None:
-                continue
-
-            different_cameras.append([c, None])
-            max_dist = 0
-            if central_camera_and_max_dist == (None, None):
-                central_camera_and_max_dist = (c, 1e300)
-            for other in chunk.cameras:
-                if other.group != group or other.reference.location is None:
-                    continue
-                dist = get_xy_distance(other.reference.location, c.reference.location)
-                if dist > max_dist:
-                    max_dist = dist
-
-            # if this camera is closer to all cameras then the previous possible center,
-            # then choose this camera as the center one
-            if max_dist < central_camera_and_max_dist[1]:
-                central_camera_and_max_dist = (c, max_dist)
-
-        success = False
-        if len(different_cameras) > 0 and cameras_number_for_align > 5:
-            central_camera_location = central_camera_and_max_dist[0].reference.location
-            for cam_dist in different_cameras:
-                cam_dist[1] = get_xy_distance(cam_dist[0].reference.location, central_camera_location)
-
-            # sort cameras with repsect to their distance to the central camera
-            different_cameras.sort(key=lambda x: x[1])
-            print('central camera name is {}'.format(central_camera_and_max_dist[0].label))
-            
-            # enable cameras that will be aligned fairly, using photoscan
-            for cam_dist in different_cameras[:cameras_number_for_align]:
-                cam_dist[0].enabled = True
-
-            # try aligning cameras |cameras_number_for_align| cameras 
-            match_result = chunk.matchPhotos(preselection=ps.Preselection.ReferencePreselection)
-
-            if match_result:
-                align_result = chunk.alignCameras()
-                if align_result:
-                    yaws_deltas, first_class_yaw = estimate_wind_angle(chunk, min_latitude,
-                                                                       min_longitude, same_yaw_bound)
-                    yaws_deltas_per_group.append(yaws_deltas)
-                    first_class_yaw_per_group.append(first_class_yaw)
-                    success = True
-
-        if not success:
-            yaws_deltas_per_group.append([0, 0])
-            first_class_yaw_per_group.append(0)
-            if len(different_cameras) > 0:
-                print('Camera group {} was not aligned. '
-                      'Using predefined calibration and no wind estimation.'.format(group))
-
-        for cam_dist in different_cameras[:cameras_number_for_align]:
-            cam_dist[0].enabled = False
-    for c in chunk.cameras:
-        c.enabled = True
     return yaws_deltas_per_group, first_class_yaw_per_group
 
 
@@ -291,7 +220,7 @@ def extend_3d_vector(v):
     return ps.Vector([v.x, v.y, v.z, 0])
 
 
-def estimate_wind_angle(chunk, min_latitude, min_longitude, same_yaw_bound=40):
+def estimate_wind_angle(chunk, group, min_latitude, min_longitude, same_yaw_bound=40):
     i, j, k = get_chunk_vectors(min_latitude, min_longitude) # i || North
     i, j = extend_3d_vector(i), extend_3d_vector(j)
     
@@ -302,7 +231,7 @@ def estimate_wind_angle(chunk, min_latitude, min_longitude, same_yaw_bound=40):
 
     class_sizes = [0, 0]
     for c in chunk.cameras:
-        if not c.enabled or c.transform is None:
+        if not c.enabled or c.group != group:
             continue
         if first_class_yaw is None:
             first_class_yaw = c.reference.rotation.x
@@ -349,6 +278,8 @@ def align_cameras(chunk, min_latitude, min_longitude):
     i, j, k = get_chunk_vectors(min_latitude, min_longitude) # i || North
 
     for c in chunk.cameras:
+        if c.transform is not None:
+            continue
         group_index = chunk.camera_groups.index(c.group) if c.group is not None else -1
 
         location = c.reference.location
