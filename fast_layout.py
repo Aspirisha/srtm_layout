@@ -200,56 +200,8 @@ def get_xy_distance(v1, v2):
     dv.z = 0
     return dv.norm()
 
-
-# Estimates yaw crrection due to wind for every camera group
-def get_camera_calibration(chunk, min_latitude, min_longitude, same_yaw_bound):
-    request = "Insert number of photos to estimate camera calibration"
-
-    yaws_deltas_per_group, first_class_yaw_per_group = [], []
-    groups = copy.copy(chunk.camera_groups)
-
-    groups.append(None)
-    for group in groups:
-        yaws_deltas, first_class_yaw = estimate_wind_angle(chunk, group, min_latitude,
-                                                           min_longitude, same_yaw_bound)
-        yaws_deltas_per_group.append(yaws_deltas)
-        first_class_yaw_per_group.append(first_class_yaw)
-
-    return yaws_deltas_per_group, first_class_yaw_per_group
-
-
 def extend_3d_vector(v):
     return ps.Vector([v.x, v.y, v.z, 0])
-
-def split_cameras_in_two_types_group_by_direction(chunk, group):
-    forward_cameras = set()
-    backward_cameras = set()
-
-    group_cameras = list(filter(lambda c: c.group == group, chunk.cameras))
-    if len(group_cameras) < 2:
-        forward_cameras.update(group_cameras)
-        return forward_cameras, []
-
-    forward_dir = group_cameras[1].reference.location - group_cameras[0].reference.location
-    forward_dir.normalize()
-
-    forward_cameras.update(group_cameras[0:2])
-
-    # if directions of two consequent cameras vary more than by this angle,
-    # consider them as opposite
-    max_angle_for_same_dir = math.pi / 6
-    max_cos = math.cos(max_angle_for_same_dir)
-
-    for i, cur_camera in enumerate(group_cameras[2:]):
-        prev_camera = group_cameras[i - 1]
-        cur_dir = cur_camera.reference.location - prev_camera.reference.location
-        cur_dir.normalize()
-        if cur_dir * forward_dir > max_cos:
-            forward_cameras.add(cur_camera)
-        else:
-            backward_cameras.add(cur_camera)
-
-    return forward_cameras, backward_cameras
 
 # i and j are unit axis vectors in chunk coordinate system
 # i || North
@@ -288,58 +240,6 @@ def estimate_rotation_matrices(chunk, i, j):
                 c.reference.rotation = ps.Vector([yaw, 0, 0])
                 # print(c.reference.rotation)
         group_cameras[-1].reference.rotation = group_cameras[-2].reference.rotation
-
-
-def estimate_wind_angle(chunk, group, min_latitude, min_longitude, same_yaw_bound=40):
-    i, j, k = get_chunk_vectors(min_latitude, min_longitude) # i || North
-    i, j = extend_3d_vector(i), extend_3d_vector(j)
-    
-    # since copter usually flies lineary back and forth, 
-    # we need to estimate two wind angles: one angle for each direction
-    yaws_deltas = [0, 0] # initial estimation is no wind
-    first_class_yaw = None
-
-    class_sizes = [0, 0]
-    for c in chunk.cameras:
-        if not c.enabled or c.group != group:
-            continue
-
-        if c.reference.rotation is not None:
-            angle_range = 30
-        else:
-            angle_range = 180
-
-        if first_class_yaw is None:
-            if c.reference.rotation is not None:
-                first_class_yaw = c.reference.rotation.x
-
- 
-        fi_no_wind = c.reference.rotation.x + 90 if c.reference.rotation is not None else 0
-        best_delta_fi = 0
-        min_norm = 1e300
-
-        # find best matching wind angle for given camera c
-        for delta_fi in util.frange(-angle_range, angle_range, 0.1):
-            fi = fi_no_wind + delta_fi
-            fi_rad = math.radians(fi)
-            ii_w, jj_w = i * math.cos(fi_rad) + j * math.sin(fi_rad), j * math.cos(fi_rad) - i * math.sin(fi_rad)
-            norm = (c.transform.col(0) - ii_w) * (c.transform.col(0) - ii_w) + \
-                   (c.transform.col(1) - jj_w) * (c.transform.col(1) - jj_w)
-            if norm < min_norm:
-                min_norm = norm
-                best_delta_fi = delta_fi
-
-        # is this estimation for flying forward or backward?
-        idx = 0 if math.fabs(first_class_yaw - c.reference.rotation.x) < same_yaw_bound else 1
-        yaws_deltas[idx] += best_delta_fi
-        #print('{} : {}'.format(c.label, best_delta_fi))
-        class_sizes[idx] += 1
-
-    for i in range(2):
-        if class_sizes[i] > 0:
-            yaws_deltas[i] /= class_sizes[i]
-    return yaws_deltas, first_class_yaw
-
 
 @time_measure
 def align_cameras(chunk, min_latitude, min_longitude):
@@ -469,7 +369,6 @@ def run_camera_alignment():
 
     min_latitude, min_longitude, max_latitude, max_longitude = get_chunk_bounds(chunk)
     try:
-        print("before align")
         align_cameras(chunk, min_latitude, min_longitude)
     except Exception as e:
         print(e)
