@@ -167,6 +167,8 @@ def get_photos_delta(chunk):
         return ps.Vector([0,0,0])
     c1 = chunk.cameras[:mid_idx][-1]
     c2 = chunk.cameras[:mid_idx][-2]
+    print(c1.reference.location)
+    print(c2.reference.location)
     offset = c1.reference.location - c2.reference.location
     for i in range(len(offset)):
         offset[i] = math.fabs(offset[i])
@@ -199,7 +201,7 @@ def get_xy_distance(v1, v2):
     return dv.norm()
 
 
-# Estimates yaw crrection due to wind for this camera group
+# Estimates yaw crrection due to wind for every camera group
 def get_camera_calibration(chunk, min_latitude, min_longitude, same_yaw_bound):
     request = "Insert number of photos to estimate camera calibration"
 
@@ -219,6 +221,74 @@ def get_camera_calibration(chunk, min_latitude, min_longitude, same_yaw_bound):
 def extend_3d_vector(v):
     return ps.Vector([v.x, v.y, v.z, 0])
 
+def split_cameras_in_two_types_group_by_direction(chunk, group):
+    forward_cameras = set()
+    backward_cameras = set()
+
+    group_cameras = list(filter(lambda c: c.group == group, chunk.cameras))
+    if len(group_cameras) < 2:
+        forward_cameras.update(group_cameras)
+        return forward_cameras, []
+
+    forward_dir = group_cameras[1].reference.location - group_cameras[0].reference.location
+    forward_dir.normalize()
+
+    forward_cameras.update(group_cameras[0:2])
+
+    # if directions of two consequent cameras vary more than by this angle,
+    # consider them as opposite
+    max_angle_for_same_dir = math.pi / 6
+    max_cos = math.cos(max_angle_for_same_dir)
+
+    for i, cur_camera in enumerate(group_cameras[2:]):
+        prev_camera = group_cameras[i - 1]
+        cur_dir = cur_camera.reference.location - prev_camera.reference.location
+        cur_dir.normalize()
+        if cur_dir * forward_dir > max_cos:
+            forward_cameras.add(cur_camera)
+        else:
+            backward_cameras.add(cur_camera)
+
+    return forward_cameras, backward_cameras
+
+# i and j are unit axis vectors in chunk coordinate system
+# i || North
+def estimate_rotation_matrices(chunk, i, j):
+    groups = copy.copy(chunk.camera_groups)
+
+    groups.append(None)
+    for group in groups:
+        group_cameras = list(filter(lambda c: c.group == group, chunk.cameras))
+
+        if len(group_cameras) == 0:
+            continue
+
+        if len(group_cameras) == 1:
+            if group_cameras[0].reference.rotation is None:
+                group_cameras[0].reference.rotation = ps.Vector([0,0,0])
+            continue
+        
+        
+        for idx, c in enumerate(group_cameras[0:-1]):
+            next_camera = group_cameras[idx+1]
+
+            if c.reference.rotation is None:
+                if c.reference.location is None or next_camera.reference.location is None:
+                    continue
+                direction = delta_vector_to_chunk(c.reference.location, next_camera.reference.location)
+
+                cos_yaw = direction * i
+                yaw = math.degrees(math.acos(cos_yaw)) # TODO not sure about this offset
+
+                #print("{} direction is {} and yaw is {}".format(i, direction, yaw))
+
+                if direction * j > 0:
+                    yaw = -yaw
+
+                c.reference.rotation = ps.Vector([yaw, 0, 0])
+                # print(c.reference.rotation)
+        group_cameras[-1].reference.rotation = group_cameras[-2].reference.rotation
+
 
 def estimate_wind_angle(chunk, group, min_latitude, min_longitude, same_yaw_bound=40):
     i, j, k = get_chunk_vectors(min_latitude, min_longitude) # i || North
@@ -233,15 +303,23 @@ def estimate_wind_angle(chunk, group, min_latitude, min_longitude, same_yaw_boun
     for c in chunk.cameras:
         if not c.enabled or c.group != group:
             continue
-        if first_class_yaw is None:
-            first_class_yaw = c.reference.rotation.x
 
-        fi_no_wind = c.reference.rotation.x + 90
+        if c.reference.rotation is not None:
+            angle_range = 30
+        else:
+            angle_range = 180
+
+        if first_class_yaw is None:
+            if c.reference.rotation is not None:
+                first_class_yaw = c.reference.rotation.x
+
+ 
+        fi_no_wind = c.reference.rotation.x + 90 if c.reference.rotation is not None else 0
         best_delta_fi = 0
         min_norm = 1e300
 
         # find best matching wind angle for given camera c
-        for delta_fi in util.frange(-30, 30, 0.1):
+        for delta_fi in util.frange(-angle_range, angle_range, 0.1):
             fi = fi_no_wind + delta_fi
             fi_rad = math.radians(fi)
             ii_w, jj_w = i * math.cos(fi_rad) + j * math.sin(fi_rad), j * math.cos(fi_rad) - i * math.sin(fi_rad)
@@ -270,16 +348,13 @@ def align_cameras(chunk, min_latitude, min_longitude):
         chunk.transform.rotation = ps.Matrix([[1,0,0], [0,1,0], [0,0,1]])
         chunk.transform.translation = ps.Vector([0,0,0])
 
-    same_yaw_bound = 40 # within this bound all yaws are considered to be for same direction flights
-    yaws_deltas, first_class_yaw = get_camera_calibration(chunk, min_latitude, min_longitude, same_yaw_bound=40)
-
-    print('Estimated yaw offsets {}'.format(yaws_deltas))
-
     i, j, k = get_chunk_vectors(min_latitude, min_longitude) # i || North
+    estimate_rotation_matrices(chunk, i, j)
 
     for c in chunk.cameras:
         if c.transform is not None:
             continue
+
         group_index = chunk.camera_groups.index(c.group) if c.group is not None else -1
 
         location = c.reference.location
@@ -287,8 +362,6 @@ def align_cameras(chunk, min_latitude, min_longitude):
             continue
         chunk_coordinates = wgs_to_chunk(chunk, location)
         fi = c.reference.rotation.x + 90
-        idx = 0 if math.fabs(c.reference.rotation.x - first_class_yaw[group_index]) < same_yaw_bound else 1
-        fi += yaws_deltas[group_index][idx]
         fi = math.radians(fi)
         roll = math.radians(c.reference.rotation.z)
         pitch = math.radians(c.reference.rotation.y)
@@ -309,6 +382,8 @@ def align_cameras(chunk, min_latitude, min_longitude):
                                  [ii.y, jj.y, kk.y, chunk_coordinates[1]],
                                  [ii.z, jj.z, kk.z, chunk_coordinates[2]],
                                  [0, 0, 0, 1]])
+
+        #print(c.transform)
 
 def revert_changes(chunk):
     for c in chunk.cameras:
@@ -394,6 +469,7 @@ def run_camera_alignment():
 
     min_latitude, min_longitude, max_latitude, max_longitude = get_chunk_bounds(chunk)
     try:
+        print("before align")
         align_cameras(chunk, min_latitude, min_longitude)
     except Exception as e:
         print(e)
@@ -410,11 +486,10 @@ def import_srtm_mesh():
     mesh_file = os.path.join(get_path_in_chunk(), '.srtm', 'model.obj')
     build_mesh(mesh_file, min_latitude, max_latitude, min_longitude, max_longitude, 0.001, 0.001)
 
-def injectFastLayout():
-    translator = get_translator(QtGui.QApplication.instance())
-    # ps.app.addMenuItem(translator.translate(
-    #         'dlg', "Tools/Import/Import SRTM DEM..."), run_import)
-    ps.app.addMenuItem(translator.translate(
-        'dlg', "Workflow/Apply Vertical Camera Alignment..."), run_camera_alignment)
-    # ps.app.addMenuItem(translator.translate(
-    #         'dlg', "Tools/Import/Import SRTM mesh..."), import_srtm_mesh)
+#def injectFastLayout():
+translator = get_translator(QtGui.QApplication.instance())
+# ps.app.addMenuItem(translator.translate(
+#         'dlg', "Tools/Import/Import SRTM DEM..."), run_import)
+ps.app.addMenuItem("Workflow/Apply Vertical Camera Alignment...", run_camera_alignment)
+# ps.app.addMenuItem(translator.translate(
+#         'dlg', "Tools/Import/Import SRTM mesh..."), import_srtm_mesh)
