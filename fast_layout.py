@@ -1,17 +1,13 @@
 import PhotoScan as ps
 import math
 import os, sys
-# from fast_layout.layout_builder.DelaunayVoronoi import computeDelaunayTriangulation
 import numpy as np
-from osgeo import gdal
 import time
-# from fast_layout.layout_builder import util, hgt_downloader, gdal_merge, ProgressDialog
 from PySide import QtCore, QtGui
 import copy
 
 support_directory = os.path.dirname(os.path.realpath(__file__)) + os.sep + u'layout_builder'
 support_directory = str(support_directory.encode(sys.getfilesystemencoding()), 'utf8')
-gdal.UseExceptions()
 
 
 def time_measure(func):
@@ -75,59 +71,6 @@ def get_chunk_vectors(lat, lon):
     y = delta_vector_to_chunk(ps.Vector([lon, lat, 0]), ps.Vector([lon + 0.001, lat, 0]))
     x = delta_vector_to_chunk(ps.Vector([lon, lat, 0]), ps.Vector([lon, lat+0.001, 0]))
     return x,y,-z
-
-
-def write_model_file(f, points, normals, faces):
-    f.write('mtllib mymodel.mtl\nusemtl Solid\n')
-    for p in points:
-        f.write("v {:.6f} {:.6f} {:.6f}\n".format(p[0], p[1], p[2]))
-    for n in normals:
-        f.write("vn {:.6f} {:.6f} {:.6f}\n".format(n[0], n[1], n[2]))
-    for face in faces:
-        f.write("f {0}//{0} {1}//{1} {2}//{2}\n".format(face[1] + 1, face[0] + 1, face[2] + 1))
-
-
-def build_mesh(output_file, min_latitude, max_latitude, min_longitude, max_longitude, lat_step, long_step):
-    hgts_folder = get_hgts_folder()
-    downloader_tasks = ['convert']
-    downloader = hgt_downloader.HGTDownloader(min_latitude, min_longitude,
-                                              max_latitude, max_longitude, hgts_folder,
-                                              downloader_tasks)
-    if not run_downloader(downloader):
-        return
-
-    def get_height(x, y):
-        return downloader.elevation_data.get_elevation(x, y, approximate=True)
-
-    mesh_points = np.array([[longitude, latitude, get_height(latitude, longitude) ]
-        for latitude in util.frange(min_latitude, max_latitude, lat_step)
-        for longitude in util.frange(min_longitude, max_longitude, long_step)])
-    last_ok = 0
-    for p in mesh_points:
-        if p[2] is None:
-            p[2] = last_ok
-        else:
-            last_ok = p[2]
-
-    points = [ps.Vector(p) for p in mesh_points]
-    faces = np.array(computeDelaunayTriangulation(points))
-    norms = np.zeros(mesh_points.shape, dtype=mesh_points.dtype)
-
-    tris = mesh_points[faces]
-    # normals for all triangles
-    n = np.cross( tris[::,1 ] - tris[::,0]  , tris[::,2 ] - tris[::,0] )
-    normalize_v3(n)
-    norms[ faces[:,0] ] += n
-    norms[ faces[:,1] ] += n
-    norms[ faces[:,2] ] += n
-    normalize_v3(norms)
-
-    with open(output_file, "w") as f:
-        write_model_file(f, mesh_points, norms, faces)
-    print("Successfully built mesh")
-
-    ps.app.document.chunk.importModel(output_file)
-    print("Mesh imported")
 
 
 def wgs_to_chunk(chunk, point):
@@ -203,6 +146,11 @@ def get_xy_distance(v1, v2):
 def extend_3d_vector(v):
     return ps.Vector([v.x, v.y, v.z, 0])
 
+# Evaluates rotation matrices for cameras that have location
+# algorithm is straightforward: we assume copter has zero pitch and roll,
+# and yaw is evaluated from current copter direction
+# current direction is evaluated simply subtracting location of 
+# current camera from the next camera location 
 # i and j are unit axis vectors in chunk coordinate system
 # i || North
 def estimate_rotation_matrices(chunk, i, j):
@@ -229,16 +177,16 @@ def estimate_rotation_matrices(chunk, i, j):
                     continue
                 direction = delta_vector_to_chunk(c.reference.location, next_camera.reference.location)
 
-                cos_yaw = direction * i
-                yaw = math.degrees(math.acos(cos_yaw)) # TODO not sure about this offset
+                cos_yaw = direction * j
+                yaw = math.degrees(math.acos(cos_yaw)) + 90 # TODO not sure about this offset
 
                 #print("{} direction is {} and yaw is {}".format(i, direction, yaw))
 
-                if direction * j > 0:
+                if direction * i > 0:
                     yaw = -yaw
 
                 c.reference.rotation = ps.Vector([yaw, 0, 0])
-                # print(c.reference.rotation)
+                #print(c.reference.rotation)
         group_cameras[-1].reference.rotation = group_cameras[-2].reference.rotation
 
 @time_measure
@@ -290,76 +238,6 @@ def revert_changes(chunk):
         c.transform = None
 
 
-def run_downloader(downloader):
-    def download_canceled():
-        downloader.stop_running()
-        downloader.terminate()
-        while not downloader.isFinished():
-            time.sleep(0.1)
-
-    def download_paused():
-        downloader.set_paused(not downloader.paused)
-
-    progress_dialog = ProgressDialog.ProgressDialog()
-    progress_dialog.canceled.connect(download_canceled)
-    progress_dialog.paused.connect(download_paused)
-
-    downloader.update_current_progress.connect(progress_dialog.set_current_progress)
-    downloader.update_overall_progress.connect(progress_dialog.set_overall_progress)
-    downloader.set_current_task_name.connect(progress_dialog.set_current_label_text)
-
-    downloader.start()
-    progress_dialog.show()
-
-    while downloader.isRunning():
-        QtGui.qApp.processEvents()
-        time.sleep(0.1)
-
-    return not downloader.stopped
-
-
-class DemImporter(QtCore.QObject):
-    def __init__(self, parent=None):
-        super(DemImporter, self).__init__(parent)
-        qtapp = QtGui.QApplication.instance()
-        self.translator = get_translator(qtapp)
-        self.setObjectName("DemImporter")
-
-    def import_dem(self):
-        doc = ps.app.document
-        chunk = doc.chunk
-
-        if not check_chunk(chunk):
-            return
-
-        min_latitude, min_longitude, max_latitude, max_longitude = get_chunk_bounds(chunk)
-        # TODO it makes sense to make tif cache common, so following is probably not to be used
-
-        if not is_existing_project():
-            print("Save project before importing dem!")
-            return
-
-        hgts_folder = os.path.join(get_path_in_chunk(), '.srtm')
-
-        downloader_tasks = ['convert', 'merge']
-        downloader = hgt_downloader.HGTDownloader(min_latitude, min_longitude,
-                                                  max_latitude, max_longitude, hgts_folder,
-                                                  downloader_tasks)
-
-        if not run_downloader(downloader):
-            revert_changes(chunk)
-            return
-        chunk.importDem(downloader.merged_tif)
-
-
-def run_import():
-    try:
-        importer = DemImporter()
-        importer.import_dem()
-    except Exception as e:
-        print(e)
-
-
 def run_camera_alignment():
     doc = ps.app.document
     chunk = doc.chunk
@@ -373,22 +251,6 @@ def run_camera_alignment():
     except Exception as e:
         print(e)
 
-
-def import_srtm_mesh():
-    doc = ps.app.document
-    chunk = doc.chunk
-
-    if not check_chunk(chunk):
-        return
-
-    min_latitude, min_longitude, max_latitude, max_longitude = get_chunk_bounds(chunk)
-    mesh_file = os.path.join(get_path_in_chunk(), '.srtm', 'model.obj')
-    build_mesh(mesh_file, min_latitude, max_latitude, min_longitude, max_longitude, 0.001, 0.001)
-
 #def injectFastLayout():
 translator = get_translator(QtGui.QApplication.instance())
-# ps.app.addMenuItem(translator.translate(
-#         'dlg', "Tools/Import/Import SRTM DEM..."), run_import)
 ps.app.addMenuItem("Workflow/Apply Vertical Camera Alignment...", run_camera_alignment)
-# ps.app.addMenuItem(translator.translate(
-#         'dlg', "Tools/Import/Import SRTM mesh..."), import_srtm_mesh)
